@@ -14,6 +14,10 @@ import checkAvailability from './checkAvailability.js';
 import createEvent from './createEvent.js';
 import updateEvent from './updateEvent.js';
 import deleteEvent from './deleteEvent.js';
+import createReminder from './createReminder.js';
+import scheduleTask from './scheduleTask.js';
+import listScheduledTasks from './listScheduledTasks.js';
+import cancelScheduledTask from './cancelScheduledTask.js';
 
 const allTools = [
   getCurrentTime,
@@ -26,6 +30,10 @@ const allTools = [
   createEvent,
   updateEvent,
   deleteEvent,
+  createReminder,
+  scheduleTask,
+  listScheduledTasks,
+  cancelScheduledTask,
 ];
 
 // Write tools need user approval unless marked low-risk

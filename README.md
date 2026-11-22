@@ -50,6 +50,17 @@ node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 | DELETE | `/api/integrations/google` | Bearer | Disconnect and revoke Google access |
 | POST | `/api/actions/:id/decision` | Bearer | Approve (optionally with edited input) or reject an action |
 | POST | `/api/conversations/:id/continue` | Bearer | After approvals: run approved actions and stream the rest of the reply |
+| GET | `/api/tasks` | Bearer | Reminders and scheduled tasks |
+| PATCH / DELETE | `/api/tasks/:id` | Bearer | Pause/resume (`{ enabled }`) or delete |
+| GET | `/api/notifications` | Bearer | Latest notifications + unread count |
+| POST | `/api/notifications/read` | Bearer | Mark some (`{ ids }`) or all as read |
+| GET | `/api/notifications/stream` | Bearer | Live notifications (Server-Sent Events) |
+
+## Reminders & scheduled tasks
+- **`create_reminder`**: one-time or repeating (cron). Delivers an in-app notification, plus an optional email to yourself.
+- **`schedule_task`**: the assistant runs an instruction later or on a repeat, in that task's own chat. It needs approval when created. Each run can email **your own address** automatically (`allowEmailToMe`). Any other action waits for approval, and you get an "Approval needed" notification.
+- The scheduler ([server/src/services/schedulerService.js](server/src/services/schedulerService.js)) checks MongoDB every 15 seconds. It claims due tasks atomically, so several server instances are safe, and it releases tasks stuck in "running" for more than 10 minutes.
+- **Limits:** agent tasks repeat at most once an hour, reminders at most every 5 minutes, and each user can have at most 20 active items.
 
 ## Google (Gmail + Calendar) setup
 Follow [docs/GOOGLE_SETUP.md](docs/GOOGLE_SETUP.md) to create OAuth credentials. OAuth tokens are stored encrypted with AES-256-GCM.
@@ -82,6 +93,6 @@ Chat uses Claude through the official `@anthropic-ai/sdk`. Set `ANTHROPIC_API_KE
 - [x] Phase 3: Tool framework + action log
 - [x] Phase 4: Google OAuth + email tools
 - [x] Phase 5: Calendar tools + confirmation cards
-- [ ] Phase 6: Reminders & scheduled tasks
+- [x] Phase 6: Reminders & scheduled tasks
 - [ ] Phase 7: Hardening & admin
 - [ ] Phase 8: Deployment

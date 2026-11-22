@@ -11,6 +11,10 @@ const TOOL_LABELS = {
   create_event: { running: 'Creating event', done: 'Created event', action: 'Create event' },
   update_event: { running: 'Updating event', done: 'Updated event', action: 'Update event' },
   delete_event: { running: 'Cancelling event', done: 'Cancelled event', action: 'Cancel event' },
+  create_reminder: { running: 'Setting a reminder', done: 'Reminder set' },
+  schedule_task: { running: 'Scheduling task', done: 'Task scheduled', action: 'Schedule task' },
+  list_scheduled_tasks: { running: 'Checking your reminders', done: 'Checked your reminders' },
+  cancel_scheduled_task: { running: 'Cancelling', done: 'Cancelled reminder/task' },
 };
 
 // Wording for actions that didn't run

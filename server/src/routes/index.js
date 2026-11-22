@@ -6,6 +6,8 @@ import conversationRoutes from './conversationRoutes.js';
 import activityRoutes from './activityRoutes.js';
 import integrationRoutes from './integrationRoutes.js';
 import actionRoutes from './actionRoutes.js';
+import taskRoutes from './taskRoutes.js';
+import notificationRoutes from './notificationRoutes.js';
 
 const router = Router();
 
@@ -18,5 +20,7 @@ router.use('/conversations', conversationRoutes);
 router.use('/activity', activityRoutes);
 router.use('/integrations', integrationRoutes);
 router.use('/actions', actionRoutes);
+router.use('/tasks', taskRoutes);
+router.use('/notifications', notificationRoutes);
 
 export default router;

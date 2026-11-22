@@ -61,7 +61,8 @@ export async function runTool(tool, block, input, ctx, action) {
 /**
  * First step for every tool call in a turn: validate, then run it now or create a pending approval.
  * @param {object} block - `tool_use` block ({ id, name, input })
- * @param {object} ctx - { user, conversationId, messageId }
+ * @param {object} ctx - { user, conversationId, messageId, autoApprove? }
+ *   autoApprove(tool, input) → true lets a write action skip the card (used by scheduled tasks the user pre-approved)
  */
 export async function prepareToolUse(block, ctx) {
   const startedAt = Date.now();
@@ -78,7 +79,7 @@ export async function prepareToolUse(block, ctx) {
     return finish(block, ctx, { tool, status: 'failed', error, startedAt });
   }
 
-  if (!needsApproval(tool)) return runTool(tool, block, parsed.data, ctx);
+  if (!needsApproval(tool) || (await ctx.autoApprove?.(tool, parsed.data))) return runTool(tool, block, parsed.data, ctx);
 
   // Needs approval: first make sure it could actually run (account connected), then build the card preview
   try {

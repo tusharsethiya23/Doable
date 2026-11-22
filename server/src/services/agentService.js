@@ -45,9 +45,10 @@ async function saveToolResults({ conversation, user, assistantDoc, toolUses, out
  * @param {Array} opts.history - API-format messages (ends with a user message or tool results)
  * @param {AbortSignal} opts.signal - set when the user presses Stop
  * @param {(event: string, data: object) => void} opts.emit - sends a live event to the browser
+ * @param {(tool, input) => boolean|Promise<boolean>} [opts.autoApprove] - lets pre-approved write actions skip the card
  * @returns {Promise<{ messages: object[], awaitingApproval: boolean }>} assistant messages saved during this run
  */
-export async function runAgent({ user, conversation, history, signal, emit }) {
+export async function runAgent({ user, conversation, history, signal, emit, autoApprove }) {
   const messages = [...history];
   const saved = [];
   const google = await Integration.findOne({ userId: user._id, provider: 'google' });
@@ -126,7 +127,7 @@ export async function runAgent({ user, conversation, history, signal, emit }) {
     if (toolUses.length === 0) return { messages: saved, awaitingApproval: false }; // final answer
 
     // ---- 3. Run tools now, or create approval requests for write actions ----
-    const ctx = { user, conversationId: conversation._id, messageId: assistantDoc._id };
+    const ctx = { user, conversationId: conversation._id, messageId: assistantDoc._id, autoApprove };
     // A tool input cut off by max_tokens can still look valid, so never run tools from a truncated turn
     const outcomes =
       final.stop_reason === 'max_tokens'

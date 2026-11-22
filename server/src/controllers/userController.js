@@ -3,6 +3,8 @@ import { clearRefreshCookie } from '../utils/tokens.js';
 import { Conversation } from '../models/Conversation.js';
 import { Message } from '../models/Message.js';
 import { Action } from '../models/Action.js';
+import { ScheduledTask } from '../models/ScheduledTask.js';
+import { Notification } from '../models/Notification.js';
 import { disconnectGoogle } from '../services/googleAuthService.js';
 
 export async function getMe(req, res) {
@@ -16,11 +18,11 @@ export async function updateMe(req, res) {
 }
 
 export async function deleteMe(req, res) {
-  // Remove everything the user owns (later phases add tasks, etc.)
+  // Remove everything the user owns (SRS FR-1.7)
+  const mine = { userId: req.user._id };
   await disconnectGoogle(req.user._id); // revokes our access at Google too
-  await Message.deleteMany({ userId: req.user._id });
-  await Action.deleteMany({ userId: req.user._id });
-  await Conversation.deleteMany({ userId: req.user._id });
+  await ScheduledTask.deleteMany(mine); // stop scheduled work first
+  await Promise.all([Message.deleteMany(mine), Action.deleteMany(mine), Conversation.deleteMany(mine), Notification.deleteMany(mine)]);
   await req.user.deleteOne();
   clearRefreshCookie(res);
   res.json({ success: true });

@@ -1,6 +1,7 @@
-// Left sidebar: "New chat" button, list of past conversations (rename/delete), and the user's account menu.
+// Left sidebar: logo + notification bell, "New chat", page links, past conversations (rename/delete), account menu.
 import { Link } from 'react-router-dom';
 import Logo from '../Logo';
+import NotificationBell from '../notifications/NotificationBell';
 import { useChatStore } from '../../store/chatStore';
 import { useAuthStore } from '../../store/authStore';
 import { logout } from '../../services/authService';
@@ -35,6 +36,7 @@ export default function Sidebar({ open, onClose }) {
       >
         <div className="flex items-center justify-between p-4">
           <Logo to="/chat" />
+          <NotificationBell onNavigate={onClose} />
         </div>
 
         <div className="px-3">
@@ -51,6 +53,13 @@ export default function Sidebar({ open, onClose }) {
             className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
           >
             <span aria-hidden="true">⚡</span> Activity
+          </Link>
+          <Link
+            to="/tasks"
+            onClick={onClose}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            <span aria-hidden="true">⏰</span> Reminders & tasks
           </Link>
           <Link
             to="/settings"

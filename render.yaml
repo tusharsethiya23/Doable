@@ -1,0 +1,49 @@
+# Render Blueprint: deploys the whole app (API + React build) as one web service.
+# Render → New → Blueprint → pick this repo. Values marked `sync: false` are asked for during setup.
+# Full guide: docs/DEPLOYMENT.md
+services:
+  - type: web
+    name: doable
+    runtime: node
+    plan: starter # the free plan sleeps when idle, which pauses reminders & scheduled tasks — see the guide
+    region: singapore # pick the region closest to your users (and to your MongoDB Atlas cluster)
+    buildCommand: npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true # redeploy on every push to the main branch
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      # --- required ---
+      - key: MONGO_URI
+        sync: false # MongoDB Atlas connection string
+      - key: CLIENT_URL
+        sync: false # your public URL, e.g. https://doable.onrender.com
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        generateValue: true # Render creates a random secret
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      # --- Google (optional, but needed for email & calendar) ---
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false # https://<your-domain>/api/integrations/google/callback
+      - key: TOKEN_ENCRYPTION_KEY
+        sync: false # 64 hex chars — generate locally (see guide); never change it after launch
+      # --- admin & limits ---
+      - key: ADMIN_EMAILS
+        sync: false
+      - key: USER_MONTHLY_BUDGET_USD
+        value: "5"
+      - key: LLM_MODEL
+        value: claude-opus-5-5
+      - key: LLM_EFFORT
+        value: medium
+      - key: ENABLE_WEB_SEARCH
+        value: "true"

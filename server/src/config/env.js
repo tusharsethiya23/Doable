@@ -7,6 +7,11 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(5000),
   MONGO_URI: z.string().min(1, 'MONGO_URI is required'),
   CLIENT_URL: z.string().default('http://localhost:5173'),
+  // Only set to true if the React app is hosted on a DIFFERENT domain than the API (needs SameSite=None cookies)
+  CROSS_SITE_COOKIES: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
   JWT_ACCESS_SECRET: z.string().min(32, 'must be at least 32 characters'),
   JWT_REFRESH_SECRET: z.string().min(32, 'must be at least 32 characters'),
   JWT_ACCESS_EXPIRES: z.string().default('15m'),
@@ -70,3 +75,13 @@ if (!googleEnabled && !isTest) console.warn('⚠️  Google integration is off �
 // First allowed client URL (where we send the browser back after connecting Google)
 export const primaryClientUrl = env.CLIENT_URL.split(',')[0].trim();
 export const isProd = env.NODE_ENV === 'production';
+
+// Production sanity checks: catch the most common deployment mistakes at startup
+if (isProd) {
+  const problems = [];
+  if (/localhost/.test(env.CLIENT_URL)) problems.push('CLIENT_URL still points to localhost — set it to your public URL (e.g. https://doable.onrender.com)');
+  if (googleEnabled && /localhost/.test(env.GOOGLE_REDIRECT_URI)) problems.push('GOOGLE_REDIRECT_URI still points to localhost');
+  if (!/^mongodb(\+srv)?:\/\//.test(env.MONGO_URI) || /127\.0\.0\.1|localhost/.test(env.MONGO_URI)) problems.push('MONGO_URI looks like a local database');
+  if (!env.ANTHROPIC_API_KEY) problems.push('ANTHROPIC_API_KEY is missing');
+  for (const p of problems) console.warn(`⚠️  [production] ${p}`);
+}

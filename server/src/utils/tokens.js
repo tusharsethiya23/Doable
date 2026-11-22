@@ -24,8 +24,9 @@ export const verifyRefreshToken = (token) => jwt.verify(token, env.JWT_REFRESH_S
 // Cookie is only sent to /api/auth routes and cannot be read by JavaScript (XSS protection)
 const cookieOptions = {
   httpOnly: true,
-  secure: isProd,
-  sameSite: isProd ? 'none' : 'lax', // 'none' allows a client on a different domain in production
+  secure: isProd || env.CROSS_SITE_COOKIES, // HTTPS only in production
+  // 'lax' when the client is served from the same domain (default); 'none' only if you host the client elsewhere
+  sameSite: env.CROSS_SITE_COOKIES ? 'none' : 'lax',
   path: '/api/auth',
 };
 

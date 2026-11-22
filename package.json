@@ -1,0 +1,14 @@
+{
+  "name": "doable",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Doable — an AI agent that answers questions and gets things done (MERN). Root scripts build and run client + server as one service.",
+  "scripts": {
+    "build": "npm ci --include=dev --prefix client && npm run build --prefix client && npm ci --omit=dev --prefix server",
+    "start": "npm start --prefix server",
+    "test": "npm test --prefix server && npm test --prefix client"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

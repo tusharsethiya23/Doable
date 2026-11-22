@@ -1,0 +1,12 @@
+# Files kept out of the Docker build (faster builds, no secrets in the image)
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+!**/.env.example
+**/coverage
+.git
+.github
+docs
+server/tests
+*.log

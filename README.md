@@ -5,8 +5,9 @@ An AI assistant that answers questions **and** performs real tasks: sending emai
 ## Project structure
 ```
 client/   React + Vite + Tailwind front-end
-server/   Node.js + Express + MongoDB API
-docs/     SRS and other documentation
+server/   Node.js + Express + MongoDB API (also serves the client in production)
+docs/     SRS, Google setup and deployment guides
+.github/  CI workflow
 ```
 
 ## Getting started
@@ -105,6 +106,17 @@ Chat uses Claude through the official `@anthropic-ai/sdk`. Set `ANTHROPIC_API_KE
 | GET | `/api/admin/users?q=` | Admin | Users with usage |
 | PATCH | `/api/admin/users/:id` | Admin | `{ disabled?, monthlyBudgetUsd? }` |
 
+## Deployment
+The app runs as **one service**: in production, Express serves the built React app from `client/dist`. Full guide: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+```bash
+npm run build   # (repo root) build the client + install the server's runtime dependencies
+NODE_ENV=production npm start
+```
+- **Render:** `render.yaml` (Blueprint, one click). **Any Docker host:** `Dockerfile`.
+- **CI:** `.github/workflows/ci.yml` runs the server tests and the client tests + build on every push and pull request.
+- If you run the root `npm run build` locally, run `npm install` in `server/` afterwards to get the dev tools (nodemon, vitest) back.
+
 ## Tests
 ```bash
 cd server && npm test   # 39 tests: unit + API (in-memory MongoDB, Claude mocked, no Google calls)
@@ -120,4 +132,4 @@ The first server run downloads a MongoDB binary (~100 MB), which takes a minute.
 - [x] Phase 5: Calendar tools + confirmation cards
 - [x] Phase 6: Reminders & scheduled tasks
 - [x] Phase 7: Hardening & admin
-- [ ] Phase 8: Deployment
+- [x] Phase 8: Deployment

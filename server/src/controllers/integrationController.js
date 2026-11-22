@@ -8,8 +8,9 @@ const NONCE_COOKIE = 'google_oauth_nonce';
 const callbackPath = new URL(env.GOOGLE_REDIRECT_URI).pathname;
 const nonceCookieOptions = {
   httpOnly: true,
-  secure: isProd,
-  sameSite: isProd ? 'none' : 'lax', // must be sent when Google redirects the browser back
+  secure: isProd || env.CROSS_SITE_COOKIES,
+  // 'lax' cookies are still sent when Google redirects the browser back (a top-level navigation)
+  sameSite: env.CROSS_SITE_COOKIES ? 'none' : 'lax',
   path: callbackPath,
 };
 

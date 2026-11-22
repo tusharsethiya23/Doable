@@ -2,6 +2,7 @@
 import { Router } from 'express';
 import authRoutes from './authRoutes.js';
 import userRoutes from './userRoutes.js';
+import conversationRoutes from './conversationRoutes.js';
 
 const router = Router();
 
@@ -10,5 +11,6 @@ router.get('/health', (_req, res) => res.json({ success: true, status: 'ok', tim
 
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
+router.use('/conversations', conversationRoutes);
 
 export default router;

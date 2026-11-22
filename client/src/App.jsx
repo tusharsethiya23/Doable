@@ -38,6 +38,7 @@ export default function App() {
 
       <Route element={<RequireAuth />}>
         <Route path="/chat" element={<Chat />} />
+        <Route path="/chat/:id" element={<Chat />} />
       </Route>
 
       <Route path="*" element={<NotFound />} />

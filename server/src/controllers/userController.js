@@ -1,5 +1,7 @@
 // HTTP handlers for /api/users: view, update and delete the logged-in user's profile.
 import { clearRefreshCookie } from '../utils/tokens.js';
+import { Conversation } from '../models/Conversation.js';
+import { Message } from '../models/Message.js';
 
 export async function getMe(req, res) {
   res.json({ success: true, user: req.user });
@@ -12,7 +14,10 @@ export async function updateMe(req, res) {
 }
 
 export async function deleteMe(req, res) {
-  await req.user.deleteOne(); // later phases will also delete conversations, tokens, tasks
+  // Remove everything the user owns (later phases add tokens, tasks, etc.)
+  await Message.deleteMany({ userId: req.user._id });
+  await Conversation.deleteMany({ userId: req.user._id });
+  await req.user.deleteOne();
   clearRefreshCookie(res);
   res.json({ success: true });
 }

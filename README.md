@@ -40,10 +40,16 @@ node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 | POST | `/api/auth/refresh` | cookie | New access token |
 | POST | `/api/auth/logout` | – | Clear session |
 | GET / PATCH / DELETE | `/api/users/me` | Bearer | Profile |
+| GET / POST | `/api/conversations` | Bearer | List / create chats |
+| GET / PATCH / DELETE | `/api/conversations/:id` | Bearer | Get (with messages) / rename / delete |
+| POST | `/api/conversations/:id/messages` | Bearer | Send a message; reply streams back as Server-Sent Events |
+
+## AI configuration
+Chat uses Claude through the official `@anthropic-ai/sdk`. Set `ANTHROPIC_API_KEY` in `server/.env` ([get a key](https://console.anthropic.com/settings/keys)). Optional: `LLM_MODEL` (default `claude-opus-5-5`), `LLM_EFFORT` (`low`…`max`, default `medium`), `LLM_MAX_TOKENS`.
 
 ## Roadmap
 - [x] Phase 1: Setup & authentication
-- [ ] Phase 2: Chat UI + LLM (streaming Q&A)
+- [x] Phase 2: Chat UI + LLM (streaming Q&A)
 - [ ] Phase 3: Tool framework + action log
 - [ ] Phase 4: Google OAuth + email tools
 - [ ] Phase 5: Calendar tools + confirmation cards

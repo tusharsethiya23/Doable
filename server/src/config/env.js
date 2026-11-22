@@ -11,6 +11,13 @@ const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(32, 'must be at least 32 characters'),
   JWT_ACCESS_EXPIRES: z.string().default('15m'),
   REFRESH_TOKEN_DAYS: z.coerce.number().int().positive().default(7),
+
+  // AI settings (the Anthropic SDK reads ANTHROPIC_API_KEY from the environment itself)
+  APP_NAME: z.string().default('Doable'),
+  ANTHROPIC_API_KEY: z.string().optional(),
+  LLM_MODEL: z.string().default('claude-opus-5-5'),
+  LLM_EFFORT: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).default('medium'),
+  LLM_MAX_TOKENS: z.coerce.number().int().positive().default(64000),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -22,4 +29,6 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
+
+if (!env.ANTHROPIC_API_KEY) console.warn('⚠️  ANTHROPIC_API_KEY is not set — chat replies will fail until you add it to .env');
 export const isProd = env.NODE_ENV === 'production';

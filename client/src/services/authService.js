@@ -23,10 +23,27 @@ export async function logout() {
 }
 
 // Called once on app start: uses the refresh cookie (if any) to log the user back in
+// (this is also how a "Sign in with Google" login lands: the server set the cookie, then sent us to /chat)
 export async function restoreSession() {
   try {
     await refreshAccessToken();
+    await syncTimezoneForNewGoogleAccount();
   } catch {
     useAuthStore.getState().clearSession();
+  }
+}
+
+// Accounts created with Google start in UTC (Google doesn't tell us the time zone) — use the browser's,
+// but only right after sign-up so we never override a time zone the user chose in Settings
+async function syncTimezoneForNewGoogleAccount() {
+  const user = useAuthStore.getState().user;
+  const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const isNew = user && Date.now() - new Date(user.createdAt).getTime() < 10 * 60 * 1000;
+  if (!isNew || user.authProvider !== 'google' || user.timezone !== 'UTC' || !browserTz || browserTz === 'UTC') return;
+  try {
+    const { data } = await api.patch('/users/me', { timezone: browserTz });
+    useAuthStore.getState().setUser(data.user);
+  } catch {
+    // not critical — the user can set it in Settings
   }
 }

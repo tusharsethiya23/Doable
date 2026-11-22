@@ -17,11 +17,38 @@ import { runAgent, resumeAgent, finalizePausedTurn } from '../services/agentServ
 import { friendlyLLMError } from '../services/llmService.js';
 import { openSSE } from '../utils/sse.js';
 import { ApiError } from '../utils/ApiError.js';
+import { escapeRegex, snippetAround } from '../utils/text.js';
 import { logError } from '../utils/logger.js';
 
+// GET /api/conversations — newest first. With ?q=… it searches chat titles AND message text (SRS FR-3.5),
+// and each result carries a short `snippet` around the first matching message.
 export async function listConversations(req, res) {
-  const conversations = await Conversation.find({ userId: req.user._id }).sort({ lastMessageAt: -1 }).limit(100);
-  res.json({ success: true, conversations });
+  const userId = req.user._id;
+  const q = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : '';
+  if (!q) {
+    const conversations = await Conversation.find({ userId }).sort({ lastMessageAt: -1 }).limit(100);
+    return res.json({ success: true, conversations });
+  }
+
+  const pattern = new RegExp(escapeRegex(q), 'i');
+  const [titleMatches, messageMatches] = await Promise.all([
+    Conversation.find({ userId, title: pattern }).select('_id'),
+    Message.find({ userId, kind: 'message', status: { $ne: 'refused' }, text: pattern })
+      .sort({ createdAt: -1 })
+      .limit(200)
+      .select('conversationId text'),
+  ]);
+
+  // First (newest) matching message per conversation becomes its snippet
+  const snippets = new Map();
+  for (const m of messageMatches) {
+    const id = m.conversationId.toString();
+    if (!snippets.has(id)) snippets.set(id, snippetAround(m.text, q));
+  }
+
+  const ids = [...new Set([...titleMatches.map((c) => c._id.toString()), ...snippets.keys()])];
+  const conversations = await Conversation.find({ _id: { $in: ids }, userId }).sort({ lastMessageAt: -1 }).limit(30);
+  res.json({ success: true, conversations: conversations.map((c) => ({ ...c.toJSON(), snippet: snippets.get(c.id) })) });
 }
 
 export async function createConversation(req, res) {

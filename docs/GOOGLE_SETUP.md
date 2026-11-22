@@ -30,9 +30,10 @@ This guide connects the app to Google so the assistant can read, draft and send 
 ## 4. Create OAuth credentials
 1. Go to **APIs & Services → Credentials → Create credentials → OAuth client ID**.
 2. **Application type:** Web application.
-3. **Authorized redirect URIs:** add
+3. **Authorized redirect URIs:** add both of these. The first is for connecting Gmail and Calendar; the second is for **"Continue with Google"** sign-in:
    `http://localhost:5173/api/integrations/google/callback`
-   (In production, add `https://<your-api-domain>/api/integrations/google/callback`.)
+   `http://localhost:5173/api/auth/google/callback`
+   In production, add the same two paths on your domain: `https://<your-domain>/api/integrations/google/callback` and `https://<your-domain>/api/auth/google/callback`.
 4. Click **Create**, then copy the **Client ID** and **Client secret**.
 
 ## 5. Configure the server

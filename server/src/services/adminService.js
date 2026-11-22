@@ -5,6 +5,7 @@ import { Action } from '../models/Action.js';
 import { ScheduledTask } from '../models/ScheduledTask.js';
 import { currentMonth, usageSummary } from './usageService.js';
 import { ApiError } from '../utils/ApiError.js';
+import { escapeRegex } from '../utils/text.js';
 
 const daysAgo = (n) => new Date(Date.now() - n * 24 * 3600 * 1000);
 const dayKey = (date) => date.toISOString().slice(0, 10); // "2026-11-22" (UTC)
@@ -62,7 +63,6 @@ export async function getStats() {
   };
 }
 
-const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // Users, newest first, optionally filtered by name/email
 export async function listUsers({ q, limit = 50 }) {

@@ -1,4 +1,5 @@
-// Left sidebar: logo + notification bell, "New chat", page links, past conversations (rename/delete), account menu.
+// Left sidebar: logo + notification bell, "New chat", page links, chat search, past conversations (rename/delete), account menu.
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Logo from '../Logo';
 import NotificationBell from '../notifications/NotificationBell';
@@ -7,8 +8,15 @@ import { useAuthStore } from '../../store/authStore';
 import { logout } from '../../services/authService';
 
 export default function Sidebar({ open, onClose }) {
-  const { conversations, activeId, rename, remove } = useChatStore();
+  const { conversations, activeId, rename, remove, searchResults, searching } = useChatStore();
   const user = useAuthStore((s) => s.user);
+  const [query, setQuery] = useState('');
+
+  // Search 300ms after the user stops typing (avoids a request per keystroke)
+  useEffect(() => {
+    const timer = setTimeout(() => useChatStore.getState().search(query), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
 
   const onRename = (c) => {
     const title = window.prompt('Rename chat', c.title);
@@ -79,7 +87,40 @@ export default function Sidebar({ open, onClose }) {
           )}
         </div>
 
-        <nav className="mt-4 flex-1 overflow-y-auto px-3 pb-4" aria-label="Conversations">
+        {/* Search chats by title or message text */}
+        <div className="mt-4 px-3">
+          <label htmlFor="chat-search" className="sr-only">
+            Search chats
+          </label>
+          <input
+            id="chat-search"
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search chats…"
+            className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950"
+          />
+        </div>
+
+        <nav className="mt-2 flex-1 overflow-y-auto px-3 pb-4" aria-label="Conversations">
+          {searchResults ? (
+            <ul className="space-y-0.5" aria-live="polite">
+              {searchResults.length === 0 && !searching && <li className="px-2 py-2 text-sm text-slate-500">No chats match “{query.trim()}”.</li>}
+              {searchResults.map((c) => (
+                <li key={c.id}>
+                  <Link
+                    to={`/chat/${c.id}`}
+                    onClick={onClose}
+                    className={`block rounded-lg px-3 py-2 text-sm ${c.id === activeId ? 'bg-brand-50 dark:bg-slate-800' : 'hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                  >
+                    <span className="block truncate font-medium">{c.title}</span>
+                    {c.snippet && <span className="line-clamp-2 block text-xs text-slate-500">{c.snippet}</span>}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <>
           {conversations.length === 0 && <p className="px-2 text-sm text-slate-500">No chats yet.</p>}
           <ul className="space-y-0.5">
             {conversations.map((c) => (
@@ -107,6 +148,8 @@ export default function Sidebar({ open, onClose }) {
               </li>
             ))}
           </ul>
+            </>
+          )}
         </nav>
 
         <div className="border-t border-slate-200 p-3 dark:border-slate-800">

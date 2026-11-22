@@ -40,8 +40,10 @@ node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 | POST | `/api/auth/login` | – | Log in |
 | POST | `/api/auth/refresh` | cookie | New access token |
 | POST | `/api/auth/logout` | – | Clear session |
-| GET / PATCH / DELETE | `/api/users/me` | Bearer | Profile |
-| GET / POST | `/api/conversations` | Bearer | List / create chats |
+| GET | `/api/auth/google` → `/api/auth/google/callback` | – | "Continue with Google": sign in or sign up (browser redirects; protected by signed state + browser cookie) |
+| GET / PATCH | `/api/users/me` | Bearer | Profile |
+| DELETE | `/api/users/me` | Bearer | Delete the account and all its data (`{ password }`, or `{ confirmEmail }` for Google-only accounts) |
+| GET / POST | `/api/conversations` | Bearer | List / create chats. `?q=` searches titles and message text (results include a `snippet`) |
 | GET / PATCH / DELETE | `/api/conversations/:id` | Bearer | Get (with messages) / rename / delete |
 | POST | `/api/conversations/:id/messages` | Bearer | Send a message; the agent's reply and tool progress stream back as Server-Sent Events |
 | GET | `/api/activity?status=&before=` | Bearer | Log of actions the agent performed |
@@ -124,7 +126,7 @@ NODE_ENV=production npm start
 
 ## Tests
 ```bash
-cd server && npm test   # 47 tests: unit + API (in-memory MongoDB, AI mocked, no Google calls)
+cd server && npm test   # 57 tests: unit + API (in-memory MongoDB, AI mocked, no Google calls)
 cd client && npm test   # client helper tests
 ```
 The first server run downloads a MongoDB binary (~100 MB), which takes a minute.

@@ -1,9 +1,10 @@
-// Register page: creates an account and logs the user straight in.
+// Register page: sign up with Google, or create an account with email + password and log straight in.
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import AuthLayout from '../components/AuthLayout';
 import FormField from '../components/FormField';
 import SubmitButton from '../components/SubmitButton';
+import GoogleSignInButton from '../components/GoogleSignInButton';
 import { register } from '../services/authService';
 import { getErrorMessage } from '../lib/api';
 
@@ -41,6 +42,7 @@ export default function Register() {
         </>
       }
     >
+      <GoogleSignInButton />
       <form onSubmit={onSubmit} className="space-y-4">
         {error && (
           <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-300">

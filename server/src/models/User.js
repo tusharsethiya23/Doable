@@ -8,7 +8,8 @@ const userSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true, maxlength: 80 },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     passwordHash: { type: String, select: false }, // never returned by queries unless asked for
-    authProvider: { type: String, enum: ['local', 'google'], default: 'local' },
+    authProvider: { type: String, enum: ['local', 'google'], default: 'local' }, // how the account was created
+    googleId: { type: String, unique: true, sparse: true, select: false }, // Google account id, set by "Sign in with Google"
     role: { type: String, enum: ['user', 'admin'], default: 'user' },
     timezone: { type: String, default: 'UTC' }, // used to resolve "tomorrow 3pm" etc.
     signature: { type: String, default: '', maxlength: 500 },

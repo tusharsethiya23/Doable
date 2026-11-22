@@ -9,7 +9,7 @@ const DISABLED_MESSAGE = 'This account has been disabled. Contact the administra
 const isAdminEmail = (email) => env.ADMIN_EMAILS.includes(email.toLowerCase());
 
 // Promotes a user listed in ADMIN_EMAILS (checked at register and login, so adding an email takes effect on next login)
-async function applyAdminRole(user) {
+export async function applyAdminRole(user) {
   if (user.role !== 'admin' && isAdminEmail(user.email)) {
     user.role = 'admin';
     await user.save();

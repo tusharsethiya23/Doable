@@ -12,6 +12,12 @@ export const GOOGLE_SCOPES = {
 // Everything requested on the "Connect Google" screen (openid + email identify which account was connected)
 export const CONNECT_SCOPES = ['openid', 'email', ...Object.values(GOOGLE_SCOPES)];
 
+// "Sign in with Google" only needs to know who the user is — no Gmail/Calendar access
+export const LOGIN_SCOPES = ['openid', 'email', 'profile'];
+
+// Login uses its own callback on the same host as GOOGLE_REDIRECT_URI (add BOTH URIs in Google Cloud)
+export const loginRedirectUri = () => new URL('/api/auth/google/callback', env.GOOGLE_REDIRECT_URI).href;
+
 export function createOAuthClient() {
   return new OAuth2Client({
     clientId: env.GOOGLE_CLIENT_ID,

@@ -10,6 +10,8 @@ export const useChatStore = create((set, get) => ({
   messages: [], // user: { id, role, text }   assistant: { id, role, parts, status, streaming?, error? }
   pendingActions: [], // approval cards: { id, toolName, preview, status, expiresAt, input, ... }
   awaitingApproval: false, // the agent is paused until the user decides
+  searchResults: null, // null = not searching; [] = searched, nothing found
+  searching: false,
   loadingMessages: false,
   isStreaming: false,
   error: '',
@@ -20,6 +22,21 @@ export const useChatStore = create((set, get) => ({
       set({ conversations: await chatApi.listConversations() });
     } catch (err) {
       set({ error: getErrorMessage(err) });
+    }
+  },
+
+  // Search chats by title and message text; an empty query clears the search
+  async search(query) {
+    const q = query.trim();
+    if (!q) return set({ searchResults: null, searching: false });
+    set({ searching: true });
+    try {
+      const results = await chatApi.listConversations(q);
+      set({ searchResults: results });
+    } catch (err) {
+      set({ error: getErrorMessage(err) });
+    } finally {
+      set({ searching: false });
     }
   },
 

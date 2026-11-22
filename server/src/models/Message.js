@@ -82,5 +82,6 @@ function toParts(ret) {
 }
 
 messageSchema.index({ conversationId: 1, createdAt: 1 });
+messageSchema.index({ userId: 1, createdAt: -1 }); // search & daily-limit queries ("this user's messages")
 
 export const Message = mongoose.model('Message', messageSchema);

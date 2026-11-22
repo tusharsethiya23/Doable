@@ -63,9 +63,10 @@ Also get a **free Gemini API key** at [aistudio.google.com/apikey](https://aistu
 
 ## 5. Google Cloud for production
 Follow [GOOGLE_SETUP.md](GOOGLE_SETUP.md), then:
-1. Go to **Credentials** and open your OAuth client. Under **Authorized redirect URIs**, add:
-   `https://<service-name>.onrender.com/api/integrations/google/callback`
-   (Keep the localhost one too for development.)
+1. Go to **Credentials** and open your OAuth client. Under **Authorized redirect URIs**, add both:
+   `https://<service-name>.onrender.com/api/integrations/google/callback` (connecting Gmail and Calendar)
+   `https://<service-name>.onrender.com/api/auth/google/callback` ("Continue with Google" sign-in)
+   Keep the localhost ones too, for development.
 2. **Publishing status:**
    - **Testing** (fine for personal use, a portfolio or a demo): up to 100 listed test users. Google sign-ins expire after **7 days**, so users click **Reconnect** in Settings once a week.
    - **In production** (open to anyone): Gmail scopes are *restricted*, so Google requires app verification and an annual third-party security assessment. Plan for weeks of work and possibly fees before opening Gmail access to the public.

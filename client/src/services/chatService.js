@@ -4,7 +4,8 @@ import { readSSE } from '../lib/sse';
 import { API_URL } from '../config';
 import { useAuthStore } from '../store/authStore';
 
-export const listConversations = () => api.get('/conversations').then((r) => r.data.conversations);
+// All conversations, or — with a query — chats whose title or messages match (each with a `snippet`)
+export const listConversations = (q) => api.get('/conversations', { params: q ? { q } : {} }).then((r) => r.data.conversations);
 export const createConversation = () => api.post('/conversations').then((r) => r.data.conversation);
 export const getConversation = (id) => api.get(`/conversations/${id}`).then((r) => r.data);
 export const renameConversation = (id, title) => api.patch(`/conversations/${id}`, { title }).then((r) => r.data.conversation);

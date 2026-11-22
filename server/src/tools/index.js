@@ -1,10 +1,18 @@
 // Tool registry: the single list of tools the agent can use.
 // To add a tool: create a file in this folder (name, description, type, inputSchema, run) and add it to `tools` below.
 import { z } from 'zod';
-import { env } from '../config/env.js';
+import { env, googleEnabled } from '../config/env.js';
 import getCurrentTime from './getCurrentTime.js';
+import searchEmails from './searchEmails.js';
+import readEmail from './readEmail.js';
+import createDraft from './createDraft.js';
+import sendEmail from './sendEmail.js';
 
-const tools = [getCurrentTime];
+const allTools = [getCurrentTime, searchEmails, readEmail, createDraft, sendEmail];
+
+// Hide tools whose integration isn't configured on this server (e.g. no Google credentials in .env)
+const integrationEnabled = { google: googleEnabled };
+const tools = allTools.filter((t) => !t.integration || integrationEnabled[t.integration]);
 
 const toolsByName = new Map(tools.map((t) => [t.name, t]));
 
@@ -12,7 +20,7 @@ export const getTool = (name) => toolsByName.get(name);
 
 // Converts a Zod schema to the JSON Schema format the Claude API expects
 function toInputSchema(zodSchema) {
-  const { $schema: _drop, ...schema } = z.toJSONSchema(zodSchema);
+  const { $schema: _drop, ...schema } = z.toJSONSchema(zodSchema, { io: 'input' }); // 'input' = fields with defaults are optional
   return schema;
 }
 

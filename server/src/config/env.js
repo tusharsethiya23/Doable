@@ -18,6 +18,16 @@ const envSchema = z.object({
   LLM_MODEL: z.string().default('claude-opus-5-5'),
   LLM_EFFORT: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).default('medium'),
   LLM_MAX_TOKENS: z.coerce.number().int().positive().default(64000),
+  // Google integration (Gmail now, Calendar next). Optional: Google features switch off if these are missing.
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_REDIRECT_URI: z.string().url().default('http://localhost:5173/api/integrations/google/callback'),
+  // 32-byte key (64 hex chars) used to encrypt OAuth tokens in the database
+  TOKEN_ENCRYPTION_KEY: z
+    .string()
+    .regex(/^[0-9a-fA-F]{64}$/, 'must be 64 hex characters (32 bytes)')
+    .optional(),
+
   // Lets the agent search the web for current info (billed per search by Anthropic)
   ENABLE_WEB_SEARCH: z
     .enum(['true', 'false'])
@@ -36,4 +46,11 @@ if (!parsed.success) {
 export const env = parsed.data;
 
 if (!env.ANTHROPIC_API_KEY) console.warn('⚠️  ANTHROPIC_API_KEY is not set — chat replies will fail until you add it to .env');
+
+// Google features are on only when all three settings are present
+export const googleEnabled = Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.TOKEN_ENCRYPTION_KEY);
+if (!googleEnabled) console.warn('⚠️  Google integration is off — set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and TOKEN_ENCRYPTION_KEY to enable it');
+
+// First allowed client URL (where we send the browser back after connecting Google)
+export const primaryClientUrl = env.CLIENT_URL.split(',')[0].trim();
 export const isProd = env.NODE_ENV === 'production';

@@ -1,6 +1,7 @@
 // The agent loop: ask Claude → if it wants tools, run them → send results back → repeat until it gives a final answer.
 // Every turn is saved to MongoDB as it happens, so the history is always valid even if the user stops halfway.
 import { Message } from '../models/Message.js';
+import { Integration } from '../models/Integration.js';
 import { streamReply, extractText, isAbortError, isApiError } from './llmService.js';
 import { executeToolUse } from './toolExecutor.js';
 import { getApiTools } from '../tools/index.js';
@@ -24,7 +25,8 @@ export async function runAgent({ user, conversation, history, signal, emit }) {
   const messages = [...history];
   const saved = [];
   const ctx = { user, conversationId: conversation._id };
-  const system = buildSystemPrompt(user);
+  const google = await Integration.findOne({ userId: user._id, provider: 'google' });
+  const system = buildSystemPrompt(user, { google });
   const tools = getApiTools();
 
   const save = async (fields) => {
@@ -109,9 +111,16 @@ export async function runAgent({ user, conversation, history, signal, emit }) {
           }))
         : await Promise.all(toolUses.map((block) => executeToolUse(block, ctx)));
 
-    for (const [i, { status }] of results.entries()) emit('tool_result', { id: toolUses[i].id, status });
+    for (const [i, { status, needsIntegration }] of results.entries()) {
+      emit('tool_result', { id: toolUses[i].id, status, needsIntegration });
+    }
 
-    assistantDoc.toolRuns = toolUses.map((b, i) => ({ toolUseId: b.id, name: b.name, status: results[i].status }));
+    assistantDoc.toolRuns = toolUses.map((b, i) => ({
+      toolUseId: b.id,
+      name: b.name,
+      status: results[i].status,
+      needsIntegration: results[i].needsIntegration,
+    }));
     await assistantDoc.save();
     await save({ role: 'user', kind: 'tool_results', content: results.map((r) => r.result) });
     messages.push({ role: 'user', content: results.map((r) => r.result) });

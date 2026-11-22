@@ -3,6 +3,7 @@
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import ToolChip from './ToolChip';
+import ConnectCard from './ConnectCard';
 
 // Links in AI replies open in a new tab
 const markdownComponents = {
@@ -32,6 +33,8 @@ export default function MessageBubble({ message }) {
 
   const parts = message.parts || [];
   const lastPart = parts.at(-1);
+  // One "Connect" card per turn, even if several tools needed the same account
+  const needsIntegration = parts.find((p) => p.needsIntegration)?.needsIntegration;
   // Show typing dots while waiting for the first output, or after a tool finished and the next turn hasn't started
   const showTyping = message.streaming && (!lastPart || (lastPart.type === 'tool' && lastPart.status !== 'running'));
 
@@ -54,6 +57,7 @@ export default function MessageBubble({ message }) {
             </div>
           )
         )}
+        {needsIntegration && <ConnectCard provider={needsIntegration} />}
         {showTyping && <TypingDots />}
         {message.error && (
           <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-300">

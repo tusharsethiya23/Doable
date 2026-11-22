@@ -10,6 +10,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Chat from './pages/Chat';
 import Activity from './pages/Activity';
+import Settings from './pages/Settings';
 import NotFound from './pages/NotFound';
 
 export default function App() {
@@ -41,6 +42,7 @@ export default function App() {
         <Route path="/chat" element={<Chat />} />
         <Route path="/chat/:id" element={<Chat />} />
         <Route path="/activity" element={<Activity />} />
+        <Route path="/settings" element={<Settings />} />
       </Route>
 
       <Route path="*" element={<NotFound />} />

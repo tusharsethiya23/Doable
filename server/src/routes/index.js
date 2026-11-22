@@ -4,6 +4,7 @@ import authRoutes from './authRoutes.js';
 import userRoutes from './userRoutes.js';
 import conversationRoutes from './conversationRoutes.js';
 import activityRoutes from './activityRoutes.js';
+import integrationRoutes from './integrationRoutes.js';
 
 const router = Router();
 
@@ -14,5 +15,6 @@ router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
 router.use('/conversations', conversationRoutes);
 router.use('/activity', activityRoutes);
+router.use('/integrations', integrationRoutes);
 
 export default router;

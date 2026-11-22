@@ -15,7 +15,10 @@ const messageSchema = new mongoose.Schema(
     // complete = normal reply, stopped = user pressed Stop, refused = model declined (not sent back to the API)
     status: { type: String, enum: ['complete', 'stopped', 'refused'], default: 'complete' },
     // Outcome of each tool call made in this (assistant) turn
-    toolRuns: [{ _id: false, toolUseId: String, name: String, status: { type: String, enum: ['success', 'failed'] } }],
+    // needsIntegration = the tool failed because an account (e.g. 'google') must be connected first
+    toolRuns: [
+      { _id: false, toolUseId: String, name: String, status: { type: String, enum: ['success', 'failed'] }, needsIntegration: String },
+    ],
     model: String,
     stopReason: String,
     usage: {
@@ -46,7 +49,7 @@ const messageSchema = new mongoose.Schema(
 function toParts(ret) {
   if (!Array.isArray(ret.content)) return [{ type: 'text', text: ret.text }];
 
-  const statusById = new Map((ret.toolRuns || []).map((r) => [r.toolUseId, r.status]));
+  const runsById = new Map((ret.toolRuns || []).map((r) => [r.toolUseId, r]));
   const parts = [];
   for (const block of ret.content) {
     if (block.type === 'text' && block.text) {
@@ -54,7 +57,14 @@ function toParts(ret) {
       if (last?.type === 'text') last.text += block.text;
       else parts.push({ type: 'text', text: block.text });
     } else if (block.type === 'tool_use' || block.type === 'server_tool_use') {
-      parts.push({ type: 'tool', id: block.id, name: block.name, status: statusById.get(block.id) ?? 'success' });
+      const run = runsById.get(block.id);
+      parts.push({
+        type: 'tool',
+        id: block.id,
+        name: block.name,
+        status: run?.status ?? 'success',
+        ...(run?.needsIntegration && { needsIntegration: run.needsIntegration }),
+      });
     } else if (block.type === 'web_search_tool_result' && !Array.isArray(block.content)) {
       const part = parts.find((p) => p.id === block.tool_use_id);
       if (part) part.status = 'failed'; // search returned an error object

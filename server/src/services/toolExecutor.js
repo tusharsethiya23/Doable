@@ -1,19 +1,21 @@
 // Runs one tool call requested by Claude: validates the input, executes the tool, logs it, and builds the tool_result.
 import { getTool } from '../tools/index.js';
 import { Action } from '../models/Action.js';
+import { IntegrationError } from '../utils/ApiError.js';
 
 const toText = (value) => (typeof value === 'string' ? value : JSON.stringify(value));
 
 /**
  * @param {object} block - the `tool_use` block from Claude ({ id, name, input })
  * @param {object} ctx - { user, conversationId }
- * @returns {Promise<{ result: object, status: 'success'|'failed' }>} result is the tool_result block for the API
+ * @returns {Promise<{ result: object, status: 'success'|'failed', needsIntegration?: string }>}
+ *   result is the tool_result block for the API; needsIntegration tells the UI to show a "Connect" button
  */
 export async function executeToolUse(block, ctx) {
   const started = Date.now();
   const tool = getTool(block.name);
 
-  const finish = async ({ status, output, error }) => {
+  const finish = async ({ status, output, error, needsIntegration }) => {
     await Action.create({
       userId: ctx.user._id,
       conversationId: ctx.conversationId,
@@ -28,6 +30,7 @@ export async function executeToolUse(block, ctx) {
     });
     return {
       status,
+      needsIntegration,
       result: {
         type: 'tool_result',
         tool_use_id: block.id,
@@ -51,15 +54,23 @@ export async function executeToolUse(block, ctx) {
     });
   }
 
-  // Safety net: tools with side effects must be confirmed by the user first (confirmation flow arrives in Phase 5)
-  if (tool.type === 'write') {
-    return finish({ status: 'failed', error: 'This action needs user confirmation, which is not available yet.' });
+  // Safety net: tools with side effects must be confirmed by the user first (approval cards arrive in Phase 5).
+  // Low-risk write tools (autoApprove, e.g. creating a draft) may run directly.
+  if (tool.type === 'write' && !tool.autoApprove) {
+    return finish({
+      status: 'failed',
+      error:
+        "This action needs the user's approval, and approvals aren't available in the app yet. If it was an email, save it with create_draft instead and tell the user they can review and send it from Gmail.",
+    });
   }
 
   try {
     const output = toText(await tool.run(parsed.data, ctx));
     return finish({ status: 'success', output });
   } catch (err) {
+    if (err instanceof IntegrationError) {
+      return finish({ status: 'failed', error: err.message, needsIntegration: err.provider });
+    }
     console.error(`Tool ${block.name} failed:`, err);
     return finish({ status: 'failed', error: `Tool failed: ${err.message}` });
   }

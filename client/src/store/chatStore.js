@@ -112,7 +112,11 @@ export const useChatStore = create((set, get) => ({
               updateLive((m) => ({ parts: [...m.parts, { type: 'tool', id: data.id, name: data.name, status: 'running' }] }));
               break;
             case 'tool_result':
-              updateLive((m) => ({ parts: m.parts.map((p) => (p.id === data.id ? { ...p, status: data.status } : p)) }));
+              updateLive((m) => ({
+                parts: m.parts.map((p) =>
+                  p.id === data.id ? { ...p, status: data.status, ...(data.needsIntegration && { needsIntegration: data.needsIntegration }) } : p
+                ),
+              }));
               break;
             case 'error':
               updateLive(() => ({ error: data.message }));

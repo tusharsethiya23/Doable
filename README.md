@@ -44,6 +44,13 @@ node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 | GET / PATCH / DELETE | `/api/conversations/:id` | Bearer | Get (with messages) / rename / delete |
 | POST | `/api/conversations/:id/messages` | Bearer | Send a message; the agent's reply and tool progress stream back as Server-Sent Events |
 | GET | `/api/activity?status=&before=` | Bearer | Log of actions the agent performed |
+| GET | `/api/integrations` | Bearer | Connected accounts |
+| POST | `/api/integrations/google/connect` | Bearer | Returns Google's consent URL |
+| GET | `/api/integrations/google/callback` | state + cookie | OAuth callback (Google redirects here) |
+| DELETE | `/api/integrations/google` | Bearer | Disconnect and revoke Google access |
+
+## Google (Gmail) setup
+Follow [docs/GOOGLE_SETUP.md](docs/GOOGLE_SETUP.md) to create OAuth credentials. Email tools: `search_emails`, `read_email`, `create_draft` (runs directly, because only you can see drafts) and `send_email` (needs your approval; approval cards arrive in Phase 5). OAuth tokens are stored encrypted with AES-256-GCM.
 
 ## Adding a tool
 1. Create `server/src/tools/myTool.js` exporting `{ name, description, type: 'read' | 'write', inputSchema (Zod), run(input, { user }) }`.
@@ -60,7 +67,7 @@ Chat uses Claude through the official `@anthropic-ai/sdk`. Set `ANTHROPIC_API_KE
 - [x] Phase 1: Setup & authentication
 - [x] Phase 2: Chat UI + LLM (streaming Q&A)
 - [x] Phase 3: Tool framework + action log
-- [ ] Phase 4: Google OAuth + email tools
+- [x] Phase 4: Google OAuth + email tools
 - [ ] Phase 5: Calendar tools + confirmation cards
 - [ ] Phase 6: Reminders & scheduled tasks
 - [ ] Phase 7: Hardening & admin

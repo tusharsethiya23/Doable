@@ -1,5 +1,5 @@
 // Message model: one turn in a conversation.
-// `content` is stored exactly as the Claude API returned it (thinking + tool blocks included) so it can be sent back unchanged;
+// `content` holds the AI turn's blocks (text / tool_use, plus Gemini thought signatures) so it can be sent back unchanged;
 // `text` is the plain text, and `parts` (built in toJSON) is what the UI renders: text and tool-call chips in order.
 import mongoose from 'mongoose';
 
@@ -8,7 +8,7 @@ const messageSchema = new mongoose.Schema(
     conversationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Conversation', required: true },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     role: { type: String, enum: ['user', 'assistant'], required: true },
-    // message = normal chat turn; tool_results = hidden turn carrying tool outputs back to Claude
+    // message = normal chat turn; tool_results = hidden turn carrying tool outputs back to the AI
     kind: { type: String, enum: ['message', 'tool_results'], default: 'message' },
     content: { type: mongoose.Schema.Types.Mixed, required: true }, // string or array of API content blocks
     text: { type: String, default: '' },

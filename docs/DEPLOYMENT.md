@@ -7,7 +7,7 @@ Doable runs as **one web service**: the Express API also serves the built React 
 | **GitHub** | Code + automatic tests (GitHub Actions) | Free |
 | **MongoDB Atlas** | Production database | Free (M0) |
 | **Render** | Runs the app | Starter $7/month (recommended), or Free with a caveat (see step 4) |
-| **Anthropic** | Claude API | Pay per use (capped per user by `USER_MONTHLY_BUDGET_USD`) |
+| **Google AI Studio** | Gemini API (the AI) | Free tier, with rate limits (requests per minute and per day) |
 | **Google Cloud** | Gmail + Calendar access | Free |
 
 Allow about 30–45 minutes for the first deploy.
@@ -33,7 +33,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 **Save this key in a password manager.** If it's lost or changed, nobody's saved Google connection can be read any more, and every user would have to reconnect.
 
-Also get an Anthropic API key from [console.anthropic.com](https://console.anthropic.com/settings/keys). Set a **spend limit** on that console as a second safety net.
+Also get a **free Gemini API key** at [aistudio.google.com/apikey](https://aistudio.google.com/apikey); no card is needed. On the **Rate limits** page in AI Studio you can see your project's free quota for `gemini-flash-lite-latest`. Keep the key on the free tier: don't link a billing account unless you mean to pay.
 
 ## 4. Deploy on Render
 1. On Render, choose **New → Blueprint**, connect your GitHub repo, and select it. Render reads `render.yaml`.
@@ -43,7 +43,7 @@ Also get an Anthropic API key from [console.anthropic.com](https://console.anthr
 |---|---|
 | `MONGO_URI` | the Atlas string from step 2 |
 | `CLIENT_URL` | `https://<service-name>.onrender.com`. Render shows the URL; you can fix it after the first deploy |
-| `ANTHROPIC_API_KEY` | your key |
+| `GEMINI_API_KEY` | your free Gemini key |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | from Google Cloud (step 5) |
 | `GOOGLE_REDIRECT_URI` | `https://<service-name>.onrender.com/api/integrations/google/callback` |
 | `TOKEN_ENCRYPTION_KEY` | the key from step 3 |
@@ -90,7 +90,7 @@ Open your URL and **register with the email you put in `ADMIN_EMAILS`**. That ac
 - [ ] Strong, unique JWT secrets (Render generates them).
 - [ ] `TOKEN_ENCRYPTION_KEY` is backed up somewhere safe.
 - [ ] An Atlas database user with a strong password, used only by this app.
-- [ ] A spend limit is set in the Anthropic console, and `USER_MONTHLY_BUDGET_USD` is set to what you're willing to pay per user.
+- [ ] The Gemini key is on the free tier, with no billing linked, and `DAILY_MESSAGE_LIMIT` is set so one user can't use up the shared quota.
 - [ ] `ADMIN_EMAILS` contains only your email(s).
 - [ ] CI is green, and auto-deploy waits for CI.
 - [ ] No `.env` file is committed (`.gitignore` already covers this).
@@ -120,3 +120,5 @@ docker run -p 5000:5000 --env-file server/.env -e NODE_ENV=production doable
 | Google `redirect_uri_mismatch` | The URI in Google Cloud must match `GOOGLE_REDIRECT_URI` exactly. |
 | Reminders don't fire | You're on the free plan and it's sleeping. Use the Starter plan or an uptime monitor (step 4). |
 | Chat says "usage limit" | The user's monthly budget is used up. Raise it in **Admin → Budget**. |
+| Chat says "free AI quota is used up" | Gemini's free per-minute or per-day limit was reached. Wait a minute, or until the daily reset, or lower `DAILY_MESSAGE_LIMIT`. |
+| Chat says "model was not found" | The `LLM_MODEL` name isn't available for your key. Check the model list in AI Studio and set a model shown there. |

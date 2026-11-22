@@ -1,58 +1,70 @@
-// Talks to Claude: streams one model turn and returns the final message.
-// Also contains helpers to prepare stored history for the API and to turn SDK errors into friendly messages.
-import { getLLMClient, Anthropic } from '../config/llm.js';
+// Talks to the AI model (Google Gemini): streams one turn and returns it in the app's neutral format
+// ({ content, stop_reason, usage, model }), so the agent loop doesn't depend on the provider.
+// Also: plain-text extraction, error classification and friendly error messages.
+import { getLLMClient, GeminiApiError } from '../config/llm.js';
 import { env } from '../config/env.js';
-
-// Beta header that enables server-side fallback: if the model declines a request for safety reasons,
-// the API automatically retries it on Anthropic's recommended fallback model.
-const FALLBACK_BETA = 'server-side-fallback-2026-07-01';
+import { toGeminiContents, fromGeminiParts, ensureFunctionCallId, toStopReason, toUsage } from './geminiFormat.js';
 
 /**
- * Streams one turn from Claude.
+ * Streams one turn from Gemini.
  * @param {object} opts
  * @param {string} opts.system - system prompt
- * @param {Array} opts.messages - conversation history in API format
- * @param {Array} [opts.tools] - tool definitions Claude may call
+ * @param {Array} opts.messages - conversation history in the app's format
+ * @param {Array} [opts.tools] - function declarations ({ name, description, parametersJsonSchema })
  * @param {AbortSignal} [opts.signal] - abort when the user presses Stop / closes the tab
  * @param {(text: string) => void} opts.onText - called with every new piece of text
- * @param {(block: {id: string, name: string}) => void} [opts.onToolStart] - called when Claude starts a tool call
- * @param {(toolUseId: string, ok: boolean) => void} [opts.onServerToolResult] - result of a server tool (web search)
- * @returns {Promise<object>} the final API message (content, stop_reason, usage, model)
+ * @param {(call: {id: string, name: string}) => void} [opts.onToolStart] - called when the model requests a tool
+ * @returns {Promise<{ content: object[], stop_reason: string, usage: object, model: string }>}
  */
-export async function streamReply({ system, messages, tools, signal, onText, onToolStart, onServerToolResult }) {
-  const stream = getLLMClient().beta.messages.stream(
-    {
-      model: env.LLM_MODEL,
-      max_tokens: env.LLM_MAX_TOKENS,
-      output_config: { effort: env.LLM_EFFORT },
-      system,
-      messages,
-      ...(tools?.length && { tools }),
-      cache_control: { type: 'ephemeral' }, // cache the conversation prefix so follow-up turns are cheaper
-      betas: [FALLBACK_BETA],
-      fallbacks: 'default',
-    },
-    { signal }
-  );
+export async function streamReply({ system, messages, tools, signal, onText, onToolStart }) {
+  const parts = [];
+  let finishReason;
+  let usageMeta;
+  let modelVersion;
 
-  for await (const event of stream) {
-    if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-      onText(event.delta.text);
-    } else if (event.type === 'content_block_start') {
-      const block = event.content_block;
-      if (block.type === 'tool_use' || block.type === 'server_tool_use') {
-        onToolStart?.({ id: block.id, name: block.name });
-      } else if (block.type === 'web_search_tool_result') {
-        // On error, content is an object ({ error_code }); on success it is a list of results
-        onServerToolResult?.(block.tool_use_id, Array.isArray(block.content));
+  try {
+    const stream = await getLLMClient().models.generateContentStream({
+      model: env.LLM_MODEL,
+      contents: toGeminiContents(messages),
+      config: {
+        systemInstruction: system,
+        maxOutputTokens: env.LLM_MAX_TOKENS,
+        abortSignal: signal,
+        ...(tools?.length && { tools: [{ functionDeclarations: tools }] }),
+      },
+    });
+
+    for await (const chunk of stream) {
+      const candidate = chunk.candidates?.[0];
+      for (const part of candidate?.content?.parts || []) {
+        if (part.thought) continue;
+        if (part.text) onText(part.text);
+        if (part.functionCall) {
+          ensureFunctionCallId(part);
+          onToolStart?.({ id: part.functionCall.id, name: part.functionCall.name });
+        }
+        parts.push(part);
       }
+      if (candidate?.finishReason) finishReason = candidate.finishReason;
+      if (chunk.promptFeedback?.blockReason) finishReason = 'PROHIBITED_CONTENT'; // the prompt itself was blocked
+      if (chunk.usageMetadata) usageMeta = chunk.usageMetadata;
+      modelVersion ??= chunk.modelVersion;
     }
+  } catch (err) {
+    // Normalise "user pressed Stop" so the agent loop recognises it
+    if (signal?.aborted) {
+      const abort = new Error('Request aborted');
+      abort.name = 'AbortError';
+      throw abort;
+    }
+    throw err;
   }
 
-  return stream.finalMessage();
+  const content = fromGeminiParts(parts);
+  return { content, stop_reason: toStopReason(finishReason, content), usage: toUsage(usageMeta), model: modelVersion ?? env.LLM_MODEL };
 }
 
-// Joins all text blocks of an API response into the plain text we show in the UI
+// Joins all text blocks of a turn into the plain text we show in the UI
 export function extractText(content) {
   if (typeof content === 'string') return content;
   return content
@@ -61,29 +73,21 @@ export function extractText(content) {
     .join('');
 }
 
-// Prepares a stored assistant message for re-sending to the API.
-// Blocks are sent back unchanged, except: after a mid-reply fallback, thinking/tool blocks that appear
-// before the last `fallback` marker must be left out (the marker itself stays where it was).
-export function toApiContent(content) {
-  if (!Array.isArray(content)) return content;
+export const isAbortError = (err) => err?.name === 'AbortError';
+// Errors returned by the Gemini API (HTTP status) — not retried by re-running the turn
+export const isApiError = (err) => err instanceof GeminiApiError || typeof err?.status === 'number' || err?.code === 'NO_API_KEY';
 
-  const lastFallback = content.findLastIndex((block) => block.type === 'fallback');
-  if (lastFallback === -1) return content;
-
-  const omitBeforeBoundary = new Set(['thinking', 'redacted_thinking', 'tool_use']);
-  return content.filter((block, i) => i >= lastFallback || !omitBeforeBoundary.has(block.type));
-}
-
-export const isAbortError = (err) => err instanceof Anthropic.APIUserAbortError || err?.name === 'AbortError';
-export const isApiError = (err) => err instanceof Anthropic.APIError;
-
-// Turns SDK errors into messages that are safe to show to the user
+// Turns AI errors into messages that are safe to show to the user
 export function friendlyLLMError(err) {
-  if (err instanceof Anthropic.AuthenticationError || /api[_ ]?key/i.test(err?.message || '')) {
+  const status = err?.status;
+  if (err?.code === 'NO_API_KEY' || status === 401 || status === 403 || /api key/i.test(err?.message || '')) {
     return 'The AI service is not configured correctly. Please check the server API key.';
   }
-  if (err instanceof Anthropic.RateLimitError) return 'The AI is busy right now. Please try again in a moment.';
-  if (err instanceof Anthropic.APIConnectionError) return 'Could not reach the AI service. Please try again.';
-  if (err instanceof Anthropic.InternalServerError) return 'The AI service had a problem. Please try again.';
+  if (status === 429) {
+    return "The free AI quota is used up for now (Gemini's free tier limits requests per minute and per day). Please try again in a little while.";
+  }
+  if (status === 404) return 'The configured AI model was not found. Ask the admin to check LLM_MODEL.';
+  if (status >= 500) return 'The AI service had a problem. Please try again.';
+  if (/fetch failed|ECONN|ENOTFOUND|ETIMEDOUT/i.test(err?.message || '')) return 'Could not reach the AI service. Please try again.';
   return 'Something went wrong while generating a reply.';
 }

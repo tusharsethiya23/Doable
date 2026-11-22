@@ -2,6 +2,7 @@
 // and blocks new AI work once a user reaches their monthly budget (SRS NFR-10).
 import { env } from '../config/env.js';
 import { User } from '../models/User.js';
+import { Message } from '../models/Message.js';
 import { ApiError } from '../utils/ApiError.js';
 
 // "2026-11" (UTC) — usage resets when this changes
@@ -46,6 +47,20 @@ export function usageSummary(user) {
   const spent = user.usage?.month === currentMonth() ? user.usage.costUsd || 0 : 0;
   const budget = budgetOf(user);
   return { month: currentMonth(), spentUsd: Number(spent.toFixed(4)), budgetUsd: budget, remainingUsd: Math.max(0, budget - spent) };
+}
+
+/**
+ * Throws 429 if the user already sent DAILY_MESSAGE_LIMIT chat messages today (UTC).
+ * The free Gemini quota is shared by ALL users of the app, so one user shouldn't be able to use it all up.
+ */
+export async function assertWithinDailyLimit(userId) {
+  if (!env.DAILY_MESSAGE_LIMIT) return;
+  const startOfDay = new Date();
+  startOfDay.setUTCHours(0, 0, 0, 0);
+  const sentToday = await Message.countDocuments({ userId, role: 'user', kind: 'message', createdAt: { $gte: startOfDay } });
+  if (sentToday >= env.DAILY_MESSAGE_LIMIT) {
+    throw new ApiError(429, `You've reached today's limit of ${env.DAILY_MESSAGE_LIMIT} messages. It resets at midnight (UTC).`);
+  }
 }
 
 /** Throws 429 if the user has used up this month's AI budget. Call before starting any AI work. */

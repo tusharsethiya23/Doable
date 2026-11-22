@@ -2,7 +2,6 @@
 import { Conversation, DEFAULT_TITLE } from '../models/Conversation.js';
 import { Message } from '../models/Message.js';
 import { ApiError } from '../utils/ApiError.js';
-import { toApiContent } from './llmService.js';
 
 // Returns the conversation only if it belongs to this user (otherwise 404, so ids can't be probed)
 export async function findOwnedConversation(conversationId, userId) {
@@ -16,7 +15,7 @@ export function findVisibleMessages(conversationId) {
   return Message.find({ conversationId, kind: { $ne: 'tool_results' } }).sort({ createdAt: 1 });
 }
 
-// Loads all turns of a conversation in the format the Claude API expects
+// Loads all turns of a conversation in the app's neutral format (llmService converts it for the AI provider)
 export async function buildApiHistory(conversationId) {
   const stored = await Message.find({ conversationId, status: { $ne: 'refused' } })
     .sort({ createdAt: 1 })
@@ -24,7 +23,7 @@ export async function buildApiHistory(conversationId) {
 
   const history = [];
   stored.forEach((m, i) => {
-    history.push({ role: m.role, content: m.role === 'assistant' ? toApiContent(m.content) : m.content });
+    history.push({ role: m.role, content: m.content });
 
     // Repair: every tool_use must be answered by a tool_result in the next message, or the API rejects the request.
     // This can only be missing if the server crashed mid-task, so answer those calls with an error.

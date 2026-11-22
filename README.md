@@ -86,7 +86,12 @@ When the agent calls a `write` tool, it **pauses**: the action is saved as `pend
 The agent loop ([server/src/services/agentService.js](server/src/services/agentService.js)) validates inputs, runs tools in parallel, logs each run to the Activity log, and stops after 10 steps.
 
 ## AI configuration
-Chat uses Claude through the official `@anthropic-ai/sdk`. Set `ANTHROPIC_API_KEY` in `server/.env` ([get a key](https://console.anthropic.com/settings/keys)). Optional: `LLM_MODEL` (default `claude-opus-5-5`), `LLM_EFFORT` (`low`…`max`, default `medium`), `LLM_MAX_TOKENS`, `ENABLE_WEB_SEARCH` (default `true`; each search is billed by Anthropic).
+Chat uses **Google Gemini's free tier** through the official `@google/genai` SDK. Set `GEMINI_API_KEY` in `server/.env`; you can get a [free key](https://aistudio.google.com/apikey) with no card needed.
+- **`LLM_MODEL`:** defaults to `gemini-flash-lite-latest`, which has the most generous free quota. `gemini-flash-latest` is smarter but allows far fewer free requests per day.
+- **`DAILY_MESSAGE_LIMIT`:** defaults to 40 messages per user per day. It protects the free quota, which all users share.
+- **`ENABLE_WEB_SEARCH`:** uses Google Search grounding; each search costs one extra request.
+- **Free-tier limits:** per-minute and per-day request limits apply, and per Google's terms, free-tier prompts may be used to improve Google's products, so test with non-sensitive data.
+- **Provider-neutral design:** the agent stores messages in its own neutral format. [server/src/services/geminiFormat.js](server/src/services/geminiFormat.js) translates them, so switching to another provider means changing only `llmService.js` and that translator.
 
 ## Security & cost controls
 - **Monthly AI budget per user:** estimated in USD from token usage, with prices set in `.env`. Once a user reaches it, new messages, approval resumes and scheduled runs return `429` until the 1st of the next month. Admins can change the budget per user. Users see their usage in **Settings**.
@@ -119,7 +124,7 @@ NODE_ENV=production npm start
 
 ## Tests
 ```bash
-cd server && npm test   # 39 tests: unit + API (in-memory MongoDB, Claude mocked, no Google calls)
+cd server && npm test   # 47 tests: unit + API (in-memory MongoDB, AI mocked, no Google calls)
 cd client && npm test   # client helper tests
 ```
 The first server run downloads a MongoDB binary (~100 MB), which takes a minute.

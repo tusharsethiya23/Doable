@@ -12,10 +12,10 @@ const actionSchema = new mongoose.Schema(
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     conversationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Conversation' },
     messageId: { type: mongoose.Schema.Types.ObjectId, ref: 'Message' }, // assistant turn that requested it
-    toolUseId: String, // id Claude gave this call (links the log to the chat message)
+    toolUseId: String, // id the AI gave this call (links the log to the chat message)
     toolName: { type: String, required: true },
     type: { type: String, enum: ['read', 'write'], default: 'read' },
-    input: mongoose.Schema.Types.Mixed, // what Claude asked for
+    input: mongoose.Schema.Types.Mixed, // what the AI asked for
     editedInput: mongoose.Schema.Types.Mixed, // what the user changed it to on the approval card (if edited)
     preview: mongoose.Schema.Types.Mixed, // { title, fields: [{ label, value, long? }] } shown on the approval card
     output: { type: String, set: (v) => (v && v.length > MAX_STORED_OUTPUT ? `${v.slice(0, MAX_STORED_OUTPUT)}…` : v) },

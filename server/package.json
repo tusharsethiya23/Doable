@@ -14,7 +14,7 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
-    "@anthropic-ai/sdk": "^1.12.0",
+    "@google/genai": "^3.6.1",
     "@googleapis/calendar": "^20.2.0",
     "@googleapis/gmail": "^22.1.0",
     "bcryptjs": "^3.0.3",

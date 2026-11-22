@@ -1,4 +1,4 @@
-// Runs tool calls requested by Claude. Each call either:
+// Runs tool calls requested by the AI model. Each call either:
 //   - runs now (read tools, low-risk writes) → { kind: 'done', status, result }
 //   - waits for the user's approval (write tools) → { kind: 'approval', action }   (an Action with status "pending")
 // Every call is recorded in the Action log.
@@ -18,12 +18,12 @@ const toText = (value) => {
 const UNTRUSTED_WARNING =
   'Suggested right after reading emails, events or web pages. Make sure this is what YOU asked for — text from others can try to trick the assistant.';
 
-// Builds the tool_result block sent back to Claude
+// Builds the tool_result block sent back to the AI
 export const toolResult = (toolUseId, content, isError = false) => ({
   type: 'tool_result',
   tool_use_id: toolUseId,
   content,
-  ...(isError && { is_error: true }), // tells Claude the call failed so it can recover
+  ...(isError && { is_error: true }), // tells the AI the call failed so it can recover
 });
 
 /** Saves the outcome to the Action log (updating `action` if it already exists) and returns a "done" result. */
@@ -119,7 +119,7 @@ export async function prepareToolUse(block, ctx) {
 
 /**
  * Turns a decided approval into a tool_result: runs it if approved (once — guarded by an atomic status change),
- * otherwise tells Claude it was rejected or expired.
+ * otherwise tells the AI it was rejected or expired.
  */
 export async function resolveApproval(block, ctx) {
   const action = await Action.findOne({ userId: ctx.user._id, toolUseId: block.id, messageId: ctx.messageId });
@@ -132,7 +132,7 @@ export async function resolveApproval(block, ctx) {
 
     const input = claimed.editedInput ?? claimed.input;
     const outcome = await runTool(getTool(block.name), block, input, ctx, claimed);
-    // Let Claude know if the user changed the details before approving
+    // Let the AI know if the user changed the details before approving
     if (claimed.editedInput && outcome.status === 'success') {
       outcome.result.content = `The user edited the details before approving. Final values used: ${JSON.stringify(input)}\nResult: ${outcome.result.content}`;
     }

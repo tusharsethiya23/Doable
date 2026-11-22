@@ -1,4 +1,4 @@
-// The agent loop: ask Claude → if it wants tools, run them → send results back → repeat until it gives a final answer.
+// The agent loop: ask the AI model → if it wants tools, run them → send results back → repeat until it gives a final answer.
 // Every turn is saved to MongoDB as it happens, so the history is always valid even if the user stops halfway.
 // If a turn contains actions that need approval, the loop PAUSES (conversation.status = 'awaiting_approval')
 // and resumes later via resumeAgent() once the user has approved/rejected them.
@@ -93,7 +93,6 @@ export async function runAgent({ user, conversation, history, signal, emit, auto
           emit('delta', { text });
         },
         onToolStart: ({ id, name }) => emit('tool_start', { id, name }),
-        onServerToolResult: (id, ok) => emit('tool_result', { id, status: ok ? 'success' : 'failed' }),
       });
       retries = 0;
       await recordUsage(user._id, final.usage); // counts towards the monthly budget
@@ -136,10 +135,6 @@ export async function runAgent({ user, conversation, history, signal, emit, auto
       },
     });
     messages.push({ role: 'assistant', content: final.content });
-    if (final.content.some((b) => b.type === 'server_tool_use' && readsUntrustedContent(b.name))) sawUntrusted = true;
-
-    // Server tool (web search) hit its internal limit: send the turn back and the server continues
-    if (final.stop_reason === 'pause_turn') continue;
 
     if (toolUses.length === 0) return { messages: saved, awaitingApproval: false }; // final answer
 

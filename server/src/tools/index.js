@@ -18,6 +18,7 @@ import createReminder from './createReminder.js';
 import scheduleTask from './scheduleTask.js';
 import listScheduledTasks from './listScheduledTasks.js';
 import cancelScheduledTask from './cancelScheduledTask.js';
+import webSearch from './webSearch.js';
 
 const allTools = [
   getCurrentTime,
@@ -43,30 +44,28 @@ export const needsApproval = (tool) => tool.type === 'write' && !tool.autoApprov
 const UNTRUSTED_OUTPUT_TOOLS = new Set(['search_emails', 'read_email', 'list_events', 'web_search', 'web_fetch']);
 export const readsUntrustedContent = (name) => UNTRUSTED_OUTPUT_TOOLS.has(name);
 
-// Hide tools whose integration isn't configured on this server (e.g. no Google credentials in .env)
+// Hide tools whose integration isn't configured on this server (e.g. no Google credentials in .env),
+// and web search when it's switched off
 const integrationEnabled = { google: googleEnabled };
-const tools = allTools.filter((t) => !t.integration || integrationEnabled[t.integration]);
+const tools = [...allTools, ...(env.ENABLE_WEB_SEARCH ? [webSearch] : [])].filter(
+  (t) => !t.integration || integrationEnabled[t.integration]
+);
 
 const toolsByName = new Map(tools.map((t) => [t.name, t]));
 
 export const getTool = (name) => toolsByName.get(name);
 
-// Converts a Zod schema to the JSON Schema format the Claude API expects
+// Converts a Zod schema to standard JSON Schema (Gemini accepts it as `parametersJsonSchema`)
 function toInputSchema(zodSchema) {
   const { $schema: _drop, ...schema } = z.toJSONSchema(zodSchema, { io: 'input' }); // 'input' = fields with defaults are optional
   return schema;
 }
 
-// Tool definitions sent to Claude. Built once, in a fixed order, so prompt caching keeps working.
-const apiTools = [
-  ...tools.map((t) => ({
-    name: t.name,
-    description: t.description,
-    input_schema: toInputSchema(t.inputSchema),
-    eager_input_streaming: true, // stream tool inputs as they are generated (we validate them ourselves)
-  })),
-  // Server tool: runs on Anthropic's servers, no code needed on our side
-  ...(env.ENABLE_WEB_SEARCH ? [{ type: 'web_search_20260209', name: 'web_search', max_uses: 5 }] : []),
-];
+// Function declarations sent to the model. Built once, in a fixed order (helps implicit prompt caching).
+const apiTools = tools.map((t) => ({
+  name: t.name,
+  description: t.description,
+  parametersJsonSchema: toInputSchema(t.inputSchema),
+}));
 
 export const getApiTools = () => apiTools;

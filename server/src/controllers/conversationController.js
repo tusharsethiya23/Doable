@@ -12,7 +12,7 @@ import {
   lockConversation,
   unlockConversation,
 } from '../services/chatService.js';
-import { assertWithinBudget } from '../services/usageService.js';
+import { assertWithinBudget, assertWithinDailyLimit } from '../services/usageService.js';
 import { runAgent, resumeAgent, finalizePausedTurn } from '../services/agentService.js';
 import { friendlyLLMError } from '../services/llmService.js';
 import { openSSE } from '../utils/sse.js';
@@ -85,6 +85,7 @@ export async function sendMessage(req, res) {
   const user = req.user;
   const conversation = await findOwnedConversation(req.params.id, user._id);
   await assertWithinBudget(user._id); // 429 if this month's AI budget is used up
+  await assertWithinDailyLimit(user._id); // 429 if today's message limit is reached (protects the shared free quota)
 
   // Approvals still open → the user moved on (handled below). Otherwise claim the chat now (409 if busy).
   const closePendingApprovals = conversation.status === 'awaiting_approval';

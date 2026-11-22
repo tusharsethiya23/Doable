@@ -9,11 +9,15 @@ import {
   buildApiHistory,
   makeTitle,
   deleteConversation,
+  lockConversation,
+  unlockConversation,
 } from '../services/chatService.js';
+import { assertWithinBudget } from '../services/usageService.js';
 import { runAgent, resumeAgent, finalizePausedTurn } from '../services/agentService.js';
 import { friendlyLLMError } from '../services/llmService.js';
 import { openSSE } from '../utils/sse.js';
 import { ApiError } from '../utils/ApiError.js';
+import { logError } from '../utils/logger.js';
 
 export async function listConversations(req, res) {
   const conversations = await Conversation.find({ userId: req.user._id }).sort({ lastMessageAt: -1 }).limit(100);
@@ -55,8 +59,9 @@ export async function removeConversation(req, res) {
  *   start → { userMessage }   title → { conversation }   turn_start / turn_reset → {}
  *   delta → { text }          tool_start → { id, name }  tool_result → { id, status, needsIntegration? }
  *   approval_required → { actions }   done → { messages, awaitingApproval }   error → { message }
+ * Always releases the conversation's "running" lock at the end.
  */
-async function streamAgent(res, work) {
+async function streamAgent(res, conversationId, work) {
   const sse = openSSE(res);
   const controller = new AbortController();
   res.on('close', () => {
@@ -67,9 +72,10 @@ async function streamAgent(res, work) {
     const { messages, awaitingApproval } = await work({ emit: sse.send, signal: controller.signal });
     sse.send('done', { messages, awaitingApproval });
   } catch (err) {
-    console.error('Agent error:', err);
+    logError('Agent run failed', err);
     sse.send('error', { message: err instanceof ApiError ? err.message : friendlyLLMError(err) });
   } finally {
+    await unlockConversation(conversationId).catch((err) => logError('Unlocking conversation failed', err));
     sse.end();
   }
 }
@@ -78,11 +84,17 @@ async function streamAgent(res, work) {
 export async function sendMessage(req, res) {
   const user = req.user;
   const conversation = await findOwnedConversation(req.params.id, user._id);
+  await assertWithinBudget(user._id); // 429 if this month's AI budget is used up
 
-  await streamAgent(res, async ({ emit, signal }) => {
-    // If approvals were still open, the user moved on: finish that turn first (undecided actions are not done)
-    if (conversation.status === 'awaiting_approval') {
-      await finalizePausedTurn({ user, conversation, emit });
+  // Approvals still open → the user moved on (handled below). Otherwise claim the chat now (409 if busy).
+  const closePendingApprovals = conversation.status === 'awaiting_approval';
+  if (!closePendingApprovals) await lockConversation(conversation._id);
+
+  await streamAgent(res, conversation._id, async ({ emit, signal }) => {
+    if (closePendingApprovals) {
+      // Finish the paused turn first (undecided actions are not done) and keep the chat locked for this reply
+      const finalized = await finalizePausedTurn({ user, conversation, emit, keepLocked: true });
+      if (!finalized) await lockConversation(conversation._id);
       emit('approvals_closed', {});
     }
 
@@ -113,6 +125,7 @@ export async function continueConversation(req, res) {
   const user = req.user;
   const conversation = await findOwnedConversation(req.params.id, user._id);
   if (conversation.status !== 'awaiting_approval') throw new ApiError(409, 'Nothing is waiting for approval in this conversation');
+  await assertWithinBudget(user._id);
 
-  await streamAgent(res, ({ emit, signal }) => resumeAgent({ user, conversation, signal, emit }));
+  await streamAgent(res, conversation._id, ({ emit, signal }) => resumeAgent({ user, conversation, signal, emit }));
 }

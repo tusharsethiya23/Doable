@@ -4,22 +4,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import MessageBubble from './MessageBubble';
 import ApprovalPanel from '../approvals/ApprovalPanel';
 import { useChatStore } from '../../store/chatStore';
-
-function groupTurns(messages) {
-  const groups = [];
-  for (const m of messages) {
-    const prev = groups.at(-1);
-    if (m.role === 'assistant' && prev?.role === 'assistant') {
-      prev.parts = [...prev.parts, ...(m.parts || [])];
-      prev.status = m.status;
-      prev.streaming = m.streaming;
-      prev.error = m.error || prev.error;
-    } else {
-      groups.push(m.role === 'assistant' ? { ...m, parts: [...(m.parts || [])] } : m);
-    }
-  }
-  return groups;
-}
+import { groupTurns } from '../../lib/groupTurns';
 
 export default function MessageList({ messages }) {
   const containerRef = useRef(null);

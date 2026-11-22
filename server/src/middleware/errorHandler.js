@@ -1,6 +1,7 @@
 // Catches unknown routes (404) and turns every thrown error into a consistent JSON response.
 import { ApiError } from '../utils/ApiError.js';
 import { isProd } from '../config/env.js';
+import { logError } from '../utils/logger.js';
 
 export function notFound(req, _res, next) {
   next(new ApiError(404, `Route not found: ${req.method} ${req.originalUrl}`));
@@ -22,7 +23,7 @@ export function errorHandler(err, _req, res, _next) {
     status = 400;
   }
 
-  if (status >= 500) console.error('💥', err);
+  if (status >= 500) logError('Unhandled request error', err);
 
   res.status(status).json({
     success: false,

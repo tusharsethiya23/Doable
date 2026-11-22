@@ -31,6 +31,8 @@ const messageSchema = new mongoose.Schema(
       inputTokens: Number,
       outputTokens: Number,
       cacheReadTokens: Number,
+      cacheWriteTokens: Number,
+      costUsd: Number, // estimated
     },
   },
   {

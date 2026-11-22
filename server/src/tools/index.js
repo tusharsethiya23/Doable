@@ -39,6 +39,10 @@ const allTools = [
 // Write tools need user approval unless marked low-risk
 export const needsApproval = (tool) => tool.type === 'write' && !tool.autoApprove;
 
+// Tools whose results contain text written by other people (could hide instructions = prompt injection)
+const UNTRUSTED_OUTPUT_TOOLS = new Set(['search_emails', 'read_email', 'list_events', 'web_search', 'web_fetch']);
+export const readsUntrustedContent = (name) => UNTRUSTED_OUTPUT_TOOLS.has(name);
+
 // Hide tools whose integration isn't configured on this server (e.g. no Google credentials in .env)
 const integrationEnabled = { google: googleEnabled };
 const tools = allTools.filter((t) => !t.integration || integrationEnabled[t.integration]);

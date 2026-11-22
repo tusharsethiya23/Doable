@@ -5,6 +5,7 @@ import Logo from '../components/Logo';
 import Spinner from '../components/Spinner';
 import ProfileForm from '../components/settings/ProfileForm';
 import GoogleIntegrationCard from '../components/settings/GoogleIntegrationCard';
+import UsageCard from '../components/settings/UsageCard';
 import { listIntegrations } from '../services/integrationService';
 import { getErrorMessage } from '../lib/api';
 
@@ -81,6 +82,13 @@ export default function Settings() {
           ) : (
             !error && <Spinner className="size-6 text-brand-600" />
           )}
+        </section>
+
+        <section aria-labelledby="usage-heading" className="space-y-3">
+          <h2 id="usage-heading" className="text-lg font-semibold">
+            Usage
+          </h2>
+          <UsageCard />
         </section>
 
         <section aria-labelledby="profile-heading" className="space-y-3">

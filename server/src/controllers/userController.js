@@ -6,9 +6,15 @@ import { Action } from '../models/Action.js';
 import { ScheduledTask } from '../models/ScheduledTask.js';
 import { Notification } from '../models/Notification.js';
 import { disconnectGoogle } from '../services/googleAuthService.js';
+import { usageSummary } from '../services/usageService.js';
 
 export async function getMe(req, res) {
-  res.json({ success: true, user: req.user });
+  res.json({ success: true, user: req.user, usage: usageSummary(req.user) });
+}
+
+// GET /api/users/me/usage — this month's AI spend vs. budget (shown in Settings)
+export async function getMyUsage(req, res) {
+  res.json({ success: true, usage: usageSummary(req.user) });
 }
 
 export async function updateMe(req, res) {

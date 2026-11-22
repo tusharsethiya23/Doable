@@ -7,6 +7,7 @@ import { createOAuthClient, CONNECT_SCOPES } from '../config/google.js';
 import { Integration } from '../models/Integration.js';
 import { ApiError, IntegrationError } from '../utils/ApiError.js';
 import { encrypt, decrypt } from '../utils/crypto.js';
+import { logError } from '../utils/logger.js';
 
 const STATE_AUDIENCE = 'google-oauth';
 
@@ -86,7 +87,7 @@ export async function getGoogleAuth(user, requiredScopes = []) {
       ...(tokens.refresh_token && { refreshTokenEnc: encrypt(tokens.refresh_token) }),
       ...(tokens.expiry_date && { expiresAt: new Date(tokens.expiry_date) }),
     };
-    Integration.updateOne({ _id: integration._id }, update).catch((err) => console.error('Saving refreshed Google token failed:', err));
+    Integration.updateOne({ _id: integration._id }, update).catch((err) => logError('Saving refreshed Google token failed', err));
   });
 
   return { client, integration };

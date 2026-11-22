@@ -56,6 +56,13 @@ export default function ApprovalCard({ action }) {
         )}
       </div>
 
+      {/* Prompt-injection hint: the action was proposed right after reading emails/web pages */}
+      {isPending && action.preview?.warning && (
+        <p role="note" className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
+          ⚠ {action.preview.warning}
+        </p>
+      )}
+
       {editing && Editor ? (
         <div className="mt-4">
           <Editor input={action.editedInput ?? action.input} saving={action.submitting} onCancel={() => setEditing(false)} onSave={(input) => submit('approve', input)} />

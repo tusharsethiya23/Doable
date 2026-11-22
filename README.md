@@ -87,6 +87,31 @@ The agent loop ([server/src/services/agentService.js](server/src/services/agentS
 ## AI configuration
 Chat uses Claude through the official `@anthropic-ai/sdk`. Set `ANTHROPIC_API_KEY` in `server/.env` ([get a key](https://console.anthropic.com/settings/keys)). Optional: `LLM_MODEL` (default `claude-opus-5-5`), `LLM_EFFORT` (`low`…`max`, default `medium`), `LLM_MAX_TOKENS`, `ENABLE_WEB_SEARCH` (default `true`; each search is billed by Anthropic).
 
+## Security & cost controls
+- **Monthly AI budget per user:** estimated in USD from token usage, with prices set in `.env`. Once a user reaches it, new messages, approval resumes and scheduled runs return `429` until the 1st of the next month. Admins can change the budget per user. Users see their usage in **Settings**.
+- **One reply at a time per chat:** a conversation lock stops a second tab, a double submit or a scheduled run from mixing up the history. A lock older than 10 minutes is taken over.
+- **Prompt injection:**
+  - text from emails, events and web pages is labelled untrusted;
+  - actions that change things always need approval;
+  - approval cards show a warning when the action was proposed right after reading outside content;
+  - unattended runs can only email the user's own address.
+- **Safe logs:** errors are logged without request headers, so Google tokens are never printed. Tool output is capped at 40k characters.
+- **Admin:** emails listed in `ADMIN_EMAILS` get the admin role. The dashboard at `/admin` shows stats and lets admins change budgets and disable accounts. Disabling an account logs the user out and stops their scheduled tasks.
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| GET | `/api/users/me/usage` | Bearer | This month's AI spend vs. budget |
+| GET | `/api/admin/stats` | Admin | Users, messages per day, actions, error rate, spend |
+| GET | `/api/admin/users?q=` | Admin | Users with usage |
+| PATCH | `/api/admin/users/:id` | Admin | `{ disabled?, monthlyBudgetUsd? }` |
+
+## Tests
+```bash
+cd server && npm test   # 39 tests: unit + API (in-memory MongoDB, Claude mocked, no Google calls)
+cd client && npm test   # client helper tests
+```
+The first server run downloads a MongoDB binary (~100 MB), which takes a minute.
+
 ## Roadmap
 - [x] Phase 1: Setup & authentication
 - [x] Phase 2: Chat UI + LLM (streaming Q&A)
@@ -94,5 +119,5 @@ Chat uses Claude through the official `@anthropic-ai/sdk`. Set `ANTHROPIC_API_KE
 - [x] Phase 4: Google OAuth + email tools
 - [x] Phase 5: Calendar tools + confirmation cards
 - [x] Phase 6: Reminders & scheduled tasks
-- [ ] Phase 7: Hardening & admin
+- [x] Phase 7: Hardening & admin
 - [ ] Phase 8: Deployment

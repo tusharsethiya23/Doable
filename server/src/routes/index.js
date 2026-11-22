@@ -8,6 +8,7 @@ import integrationRoutes from './integrationRoutes.js';
 import actionRoutes from './actionRoutes.js';
 import taskRoutes from './taskRoutes.js';
 import notificationRoutes from './notificationRoutes.js';
+import adminRoutes from './adminRoutes.js';
 
 const router = Router();
 
@@ -22,5 +23,6 @@ router.use('/integrations', integrationRoutes);
 router.use('/actions', actionRoutes);
 router.use('/tasks', taskRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/admin', adminRoutes);
 
 export default router;

@@ -10,10 +10,13 @@ import { Integration } from '../models/Integration.js';
 import { GOOGLE_SCOPES } from '../config/google.js';
 import { notify, publishConversationUpdate } from './notificationService.js';
 import { runAgent, finalizePausedTurn } from './agentService.js';
-import { buildApiHistory } from './chatService.js';
+import { buildApiHistory, lockConversation, unlockConversation } from './chatService.js';
+import { assertWithinBudget } from './usageService.js';
+import { ApiError } from '../utils/ApiError.js';
 import { withGmail, buildRawEmail, formatFrom } from './gmailService.js';
 import { nextCronRun } from '../utils/schedule.js';
 import { formatInZone } from '../utils/time.js';
+import { logError } from '../utils/logger.js';
 
 const TICK_MS = 15 * 1000;
 const STALE_LOCK_MS = 10 * 60 * 1000;
@@ -56,7 +59,7 @@ export async function tick() {
     }
     await Promise.all(runs);
   } catch (err) {
-    console.error('Scheduler tick failed:', err);
+    logError('Scheduler tick failed', err);
   } finally {
     ticking = false;
   }
@@ -69,15 +72,17 @@ async function runTask(task) {
   try {
     const user = await User.findById(task.userId);
     if (!user) return task.deleteOne(); // account deleted
+    if (user.disabled) throw new ApiError(403, 'Account is disabled');
     status = task.kind === 'reminder' ? await deliverReminder(task, user) : await runAgentTask(task, user);
   } catch (err) {
-    console.error(`Scheduled task ${task.id} failed:`, err);
+    logError(`Scheduled task ${task.id} failed`, err);
     status = 'failed';
     error = err.message;
     await notify(task.userId, {
       type: 'task_failed',
       title: `Task failed: ${task.title}`,
-      body: 'Something went wrong while running it. It will try again at the next scheduled time.',
+      // Our own errors (budget used up, chat busy…) are safe and useful to show; others stay generic
+      body: err instanceof ApiError ? err.message : 'Something went wrong while running it. It will try again at the next scheduled time.',
       link: task.conversationId ? `/chat/${task.conversationId}` : '/tasks',
     }).catch(() => {});
   }
@@ -143,15 +148,27 @@ function makeAutoApprove(task, accountEmail) {
 }
 
 async function runAgentTask(task, user) {
+  await assertWithinBudget(user._id); // scheduled runs count towards the monthly AI budget too
+
   // Each task posts its runs into its own conversation (created on first run)
   let conversation = task.conversationId && (await Conversation.findOne({ _id: task.conversationId, userId: user._id }));
   if (!conversation) {
     conversation = await Conversation.create({ userId: user._id, title: `⏰ ${task.title}`.slice(0, 120) });
     task.conversationId = conversation._id;
   }
-  // A previous run still waiting for approval is closed first (its undecided actions are not done)
-  if (conversation.status === 'awaiting_approval') await finalizePausedTurn({ user, conversation, emit: () => {} });
+  // A previous run still waiting for approval is closed first (its undecided actions are not done);
+  // then the chat is locked so the user can't type into it while the task runs
+  const finalized =
+    conversation.status === 'awaiting_approval' && (await finalizePausedTurn({ user, conversation, emit: () => {}, keepLocked: true }));
+  if (!finalized) await lockConversation(conversation._id);
+  try {
+    return await runLockedAgentTask(task, user, conversation);
+  } finally {
+    await unlockConversation(conversation._id);
+  }
+}
 
+async function runLockedAgentTask(task, user, conversation) {
   const runTime = formatInZone(new Date(), task.timezone);
   const text = `[Scheduled task "${task.title}" — ${runTime}. The user is not watching this chat right now: don't ask questions, make sensible assumptions and finish the task. Actions that change things will wait for their approval${task.allowEmailToMe ? ', except emails to their own address, which are pre-approved' : ''}.]\n\n${task.instruction}`;
   await Message.create({ conversationId: conversation._id, userId: user._id, role: 'user', content: text, text });

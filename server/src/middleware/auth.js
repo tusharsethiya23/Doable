@@ -16,6 +16,7 @@ export async function requireAuth(req, _res, next) {
 
   const user = await User.findById(payload.sub);
   if (!user) throw new ApiError(401, 'User no longer exists');
+  if (user.disabled) throw new ApiError(403, 'This account has been disabled. Contact the administrator.');
 
   req.user = user; // available to every handler after this middleware
   next();

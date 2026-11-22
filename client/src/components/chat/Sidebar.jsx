@@ -68,6 +68,15 @@ export default function Sidebar({ open, onClose }) {
           >
             <span aria-hidden="true">⚙️</span> Settings
           </Link>
+          {user?.role === 'admin' && (
+            <Link
+              to="/admin"
+              onClick={onClose}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              <span aria-hidden="true">🛡️</span> Admin
+            </Link>
+          )}
         </div>
 
         <nav className="mt-4 flex-1 overflow-y-auto px-3 pb-4" aria-label="Conversations">

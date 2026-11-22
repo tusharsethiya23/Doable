@@ -4,6 +4,7 @@ import rateLimit from 'express-rate-limit';
 import { register, login, refresh, logout } from '../controllers/authController.js';
 import { validate } from '../middleware/validate.js';
 import { registerSchema, loginSchema } from '../validators/authSchemas.js';
+import { env } from '../config/env.js';
 
 const router = Router();
 
@@ -13,6 +14,7 @@ const authLimiter = rateLimit({
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   message: { success: false, message: 'Too many attempts, please try again later' },
+  skip: () => env.NODE_ENV === 'test', // automated tests register many users from one IP
 });
 
 router.post('/register', authLimiter, validate(registerSchema), register);

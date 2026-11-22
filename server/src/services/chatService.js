@@ -45,6 +45,31 @@ export function makeTitle(text) {
   return firstLine.length > 60 ? `${firstLine.slice(0, 57).trimEnd()}…` : firstLine || DEFAULT_TITLE;
 }
 
+const STALE_LOCK_MS = 10 * 60 * 1000;
+
+/**
+ * Marks the conversation as "running" so only one agent reply happens at a time (another tab, a double submit
+ * or a scheduled run would otherwise interleave turns and break the history). Throws 409 if it's busy.
+ * A lock older than 10 minutes (e.g. the server crashed mid-reply) is taken over.
+ */
+export async function lockConversation(conversationId) {
+  const locked = await Conversation.findOneAndUpdate(
+    {
+      _id: conversationId,
+      $or: [{ status: 'idle' }, { status: 'running', lockedAt: { $lt: new Date(Date.now() - STALE_LOCK_MS) } }],
+    },
+    { status: 'running', lockedAt: new Date() },
+    { returnDocument: 'after' }
+  );
+  if (!locked) throw new ApiError(409, 'The assistant is already working in this chat. Wait for it to finish (or check another tab).');
+  return locked;
+}
+
+// Releases the lock (unless the agent paused for approval, which sets its own status)
+export async function unlockConversation(conversationId) {
+  await Conversation.updateOne({ _id: conversationId, status: 'running' }, { status: 'idle', $unset: { lockedAt: 1 } });
+}
+
 // Deletes a conversation together with all its messages (the activity log is kept as an audit trail)
 export async function deleteConversation(conversation) {
   await Message.deleteMany({ conversationId: conversation._id });

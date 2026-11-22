@@ -9,7 +9,8 @@ import { Action } from '../models/Action.js';
 import { streamReply, extractText, isAbortError, isApiError } from './llmService.js';
 import { prepareToolUse, resolveApproval, toolResult } from './toolExecutor.js';
 import { buildApiHistory } from './chatService.js';
-import { getApiTools } from '../tools/index.js';
+import { getApiTools, readsUntrustedContent } from '../tools/index.js';
+import { recordUsage, costOfUsage } from './usageService.js';
 import { buildSystemPrompt } from '../prompts/systemPrompt.js';
 import { ApiError } from '../utils/ApiError.js';
 
@@ -18,6 +19,14 @@ const MAX_TURN_RETRIES = 2; // retries when a streamed tool input can't be parse
 const REFUSAL_TEXT = "Sorry, I can't help with that request.";
 
 const toolUsesOf = (content) => (Array.isArray(content) ? content.filter((b) => b.type === 'tool_use') : []);
+
+// True if, since the user's last real message, the agent used a tool that returns other people's text
+function readUntrustedSinceLastUserMessage(history) {
+  const lastUserText = history.findLastIndex((m) => m.role === 'user' && typeof m.content === 'string');
+  return history
+    .slice(lastUserText + 1)
+    .some((m) => m.role === 'assistant' && Array.isArray(m.content) && m.content.some((b) => /tool_use$/.test(b.type) && readsUntrustedContent(b.name)));
+}
 
 // Saves the hidden "tool results" turn and records each tool's final status on the assistant message
 async function saveToolResults({ conversation, user, assistantDoc, toolUses, outcomes }) {
@@ -61,6 +70,10 @@ export async function runAgent({ user, conversation, history, signal, emit, auto
     return doc;
   };
 
+  // Has this request already read text written by other people (emails, web pages, event descriptions)?
+  // If so, approval cards warn that the action might have been suggested by that content (prompt injection).
+  let sawUntrusted = readUntrustedSinceLastUserMessage(history);
+
   let retries = 0;
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
     if (signal.aborted) break;
@@ -83,6 +96,7 @@ export async function runAgent({ user, conversation, history, signal, emit, auto
         onServerToolResult: (id, ok) => emit('tool_result', { id, status: ok ? 'success' : 'failed' }),
       });
       retries = 0;
+      await recordUsage(user._id, final.usage); // counts towards the monthly budget
     } catch (err) {
       if (isAbortError(err)) {
         // User stopped: keep the text they already saw so history matches the screen
@@ -117,9 +131,12 @@ export async function runAgent({ user, conversation, history, signal, emit, auto
         inputTokens: final.usage?.input_tokens,
         outputTokens: final.usage?.output_tokens,
         cacheReadTokens: final.usage?.cache_read_input_tokens,
+        cacheWriteTokens: final.usage?.cache_creation_input_tokens,
+        costUsd: costOfUsage(final.usage),
       },
     });
     messages.push({ role: 'assistant', content: final.content });
+    if (final.content.some((b) => b.type === 'server_tool_use' && readsUntrustedContent(b.name))) sawUntrusted = true;
 
     // Server tool (web search) hit its internal limit: send the turn back and the server continues
     if (final.stop_reason === 'pause_turn') continue;
@@ -127,7 +144,7 @@ export async function runAgent({ user, conversation, history, signal, emit, auto
     if (toolUses.length === 0) return { messages: saved, awaitingApproval: false }; // final answer
 
     // ---- 3. Run tools now, or create approval requests for write actions ----
-    const ctx = { user, conversationId: conversation._id, messageId: assistantDoc._id, autoApprove };
+    const ctx = { user, conversationId: conversation._id, messageId: assistantDoc._id, autoApprove, afterUntrusted: sawUntrusted };
     // A tool input cut off by max_tokens can still look valid, so never run tools from a truncated turn
     const outcomes =
       final.stop_reason === 'max_tokens'
@@ -160,6 +177,7 @@ export async function runAgent({ user, conversation, history, signal, emit, auto
 
     await saveToolResults({ conversation, user, assistantDoc, toolUses, outcomes });
     messages.push({ role: 'user', content: outcomes.map((o) => o.result) });
+    if (toolUses.some((b, i) => readsUntrustedContent(b.name) && outcomes[i].status === 'success')) sawUntrusted = true;
   }
 
   if (!signal.aborted) emit('error', { message: 'This task needed too many steps, so I stopped. Try breaking it into smaller requests.' });
@@ -170,9 +188,10 @@ export async function runAgent({ user, conversation, history, signal, emit, auto
  * Completes a paused turn: runs approved actions, marks rejected/undecided ones, and saves all tool results
  * so the history is valid again. Called when resuming, or when the user sends a new message instead.
  * Uses an atomic status change so two requests can't finalize the same turn twice.
+ * @param {boolean} [opts.keepLocked] - leave the conversation "running" (the caller continues the agent right away)
  * @returns {Promise<boolean>} false if there was no paused turn to finalize
  */
-export async function finalizePausedTurn({ user, conversation, emit }) {
+export async function finalizePausedTurn({ user, conversation, emit, keepLocked = false }) {
   const claimed = await Conversation.findOneAndUpdate(
     { _id: conversation._id, status: 'awaiting_approval' },
     { status: 'resuming' },
@@ -205,14 +224,15 @@ export async function finalizePausedTurn({ user, conversation, emit }) {
     });
     await saveToolResults({ conversation: claimed, user, assistantDoc, toolUses, outcomes });
   } finally {
-    await Conversation.updateOne({ _id: claimed._id }, { status: 'idle', $unset: { pendingTurn: 1 } });
-    conversation.status = 'idle';
+    const status = keepLocked ? 'running' : 'idle';
+    await Conversation.updateOne({ _id: claimed._id }, { status, ...(keepLocked && { lockedAt: new Date() }), $unset: { pendingTurn: 1 } });
+    conversation.status = status;
     conversation.pendingTurn = undefined;
   }
   return true;
 }
 
-/** Resumes the agent after the user decided on every pending approval. */
+/** Resumes the agent after the user decided on every pending approval. Leaves the chat locked ("running"). */
 export async function resumeAgent({ user, conversation, signal, emit }) {
   if (conversation.status !== 'awaiting_approval') throw new ApiError(409, 'Nothing is waiting for approval in this conversation');
   const undecided = await Action.countDocuments({
@@ -222,7 +242,7 @@ export async function resumeAgent({ user, conversation, signal, emit }) {
   });
   if (undecided) throw new ApiError(409, `Still waiting for your decision on ${undecided} action(s)`);
 
-  const finalized = await finalizePausedTurn({ user, conversation, emit });
+  const finalized = await finalizePausedTurn({ user, conversation, emit, keepLocked: true });
   if (!finalized) throw new ApiError(409, 'Nothing is waiting for approval in this conversation');
   const history = await buildApiHistory(conversation._id);
   return runAgent({ user, conversation, history, signal, emit });

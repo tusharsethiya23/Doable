@@ -6,8 +6,17 @@ import { getTool, needsApproval } from '../tools/index.js';
 import { Action, APPROVAL_TTL_MS } from '../models/Action.js';
 import { IntegrationError } from '../utils/ApiError.js';
 import { getGoogleAuth } from './googleAuthService.js';
+import { logError } from '../utils/logger.js';
 
-const toText = (value) => (typeof value === 'string' ? value : JSON.stringify(value));
+const MAX_TOOL_OUTPUT_CHARS = 40000; // a huge tool result would flood the AI's context and cost a lot
+
+const toText = (value) => {
+  const text = typeof value === 'string' ? value : JSON.stringify(value);
+  return text.length > MAX_TOOL_OUTPUT_CHARS ? `${text.slice(0, MAX_TOOL_OUTPUT_CHARS)}\n…[output truncated]` : text;
+};
+
+const UNTRUSTED_WARNING =
+  'Suggested right after reading emails, events or web pages. Make sure this is what YOU asked for — text from others can try to trick the assistant.';
 
 // Builds the tool_result block sent back to Claude
 export const toolResult = (toolUseId, content, isError = false) => ({
@@ -53,7 +62,7 @@ export async function runTool(tool, block, input, ctx, action) {
     if (err instanceof IntegrationError) {
       return finish(block, ctx, { tool, status: 'failed', error: err.message, needsIntegration: err.provider, action, startedAt, input });
     }
-    console.error(`Tool ${block.name} failed:`, err);
+    logError(`Tool ${block.name} failed`, err);
     return finish(block, ctx, { tool, status: 'failed', error: `Tool failed: ${err.message}`, action, startedAt, input });
   }
 }
@@ -85,6 +94,7 @@ export async function prepareToolUse(block, ctx) {
   try {
     if (tool.integration === 'google') await getGoogleAuth(ctx.user, tool.scopes);
     const preview = tool.preview ? await tool.preview(parsed.data, ctx) : { title: block.name, fields: [] };
+    if (ctx.afterUntrusted) preview.warning = UNTRUSTED_WARNING; // prompt-injection hint on the card
     const action = await Action.create({
       userId: ctx.user._id,
       conversationId: ctx.conversationId,

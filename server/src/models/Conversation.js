@@ -10,7 +10,9 @@ const conversationSchema = new mongoose.Schema(
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     title: { type: String, default: DEFAULT_TITLE, trim: true, maxlength: 120 },
     lastMessageAt: { type: Date, default: Date.now }, // used to sort the sidebar
-    status: { type: String, enum: ['idle', 'awaiting_approval', 'resuming'], default: 'idle' },
+    // running = the agent is replying right now (only one reply at a time per chat, so two tabs can't mix up history)
+    status: { type: String, enum: ['idle', 'running', 'awaiting_approval', 'resuming'], default: 'idle' },
+    lockedAt: Date, // when the current reply started (a stuck "running" lock is taken over after 10 minutes)
     pendingTurn: {
       assistantMessageId: { type: mongoose.Schema.Types.ObjectId, ref: 'Message' },
       // tool_result blocks of tools in that turn that already ran (keyed by tool_use_id)
@@ -27,6 +29,7 @@ const conversationSchema = new mongoose.Schema(
         delete ret.__v;
         delete ret.userId;
         delete ret.pendingTurn;
+        delete ret.lockedAt;
         return ret;
       },
     },

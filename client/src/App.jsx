@@ -9,6 +9,7 @@ import { RequireAuth, GuestOnly } from './components/RouteGuards';
 import Spinner from './components/Spinner';
 import Toasts from './components/notifications/Toasts';
 import Tasks from './pages/Tasks';
+import Admin from './pages/Admin';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -57,6 +58,7 @@ export default function App() {
         <Route path="/activity" element={<Activity />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/tasks" element={<Tasks />} />
+        <Route path="/admin" element={<Admin />} />
       </Route>
 
       <Route path="*" element={<NotFound />} />

@@ -33,6 +33,21 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .default('true')
     .transform((v) => v === 'true'),
+
+  // Cost control: each user's AI spend per calendar month is capped (admins can change it per user)
+  USER_MONTHLY_BUDGET_USD: z.coerce.number().nonnegative().default(5),
+  // Model prices in USD per million tokens (defaults = Claude Opus 5.5) and per web search — used to estimate spend
+  LLM_PRICE_INPUT: z.coerce.number().nonnegative().default(4),
+  LLM_PRICE_OUTPUT: z.coerce.number().nonnegative().default(20),
+  LLM_PRICE_CACHE_READ: z.coerce.number().nonnegative().default(0.2),
+  LLM_PRICE_CACHE_WRITE: z.coerce.number().nonnegative().default(5), // 1.25 × input
+  WEB_SEARCH_PRICE: z.coerce.number().nonnegative().default(0.01),
+
+  // Comma-separated emails that get the admin role (admin dashboard at /admin)
+  ADMIN_EMAILS: z
+    .string()
+    .default('')
+    .transform((v) => v.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean)),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -44,12 +59,13 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
+const isTest = env.NODE_ENV === 'test';
 
-if (!env.ANTHROPIC_API_KEY) console.warn('⚠️  ANTHROPIC_API_KEY is not set — chat replies will fail until you add it to .env');
+if (!env.ANTHROPIC_API_KEY && !isTest) console.warn('⚠️  ANTHROPIC_API_KEY is not set — chat replies will fail until you add it to .env');
 
 // Google features are on only when all three settings are present
 export const googleEnabled = Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.TOKEN_ENCRYPTION_KEY);
-if (!googleEnabled) console.warn('⚠️  Google integration is off — set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and TOKEN_ENCRYPTION_KEY to enable it');
+if (!googleEnabled && !isTest) console.warn('⚠️  Google integration is off — set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and TOKEN_ENCRYPTION_KEY to enable it');
 
 // First allowed client URL (where we send the browser back after connecting Google)
 export const primaryClientUrl = env.CLIENT_URL.split(',')[0].trim();

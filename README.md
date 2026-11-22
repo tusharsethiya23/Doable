@@ -42,15 +42,24 @@ node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 | GET / PATCH / DELETE | `/api/users/me` | Bearer | Profile |
 | GET / POST | `/api/conversations` | Bearer | List / create chats |
 | GET / PATCH / DELETE | `/api/conversations/:id` | Bearer | Get (with messages) / rename / delete |
-| POST | `/api/conversations/:id/messages` | Bearer | Send a message; reply streams back as Server-Sent Events |
+| POST | `/api/conversations/:id/messages` | Bearer | Send a message; the agent's reply and tool progress stream back as Server-Sent Events |
+| GET | `/api/activity?status=&before=` | Bearer | Log of actions the agent performed |
+
+## Adding a tool
+1. Create `server/src/tools/myTool.js` exporting `{ name, description, type: 'read' | 'write', inputSchema (Zod), run(input, { user }) }`.
+   Write the description as *when* to call it ("Call this when the user asks…").
+2. Add it to the `tools` array in [server/src/tools/index.js](server/src/tools/index.js).
+3. Optional: add a friendly label in [client/src/lib/toolLabels.js](client/src/lib/toolLabels.js).
+
+The agent loop ([server/src/services/agentService.js](server/src/services/agentService.js)) validates inputs, runs tools in parallel, logs each run to the Activity log, and stops after 10 steps.
 
 ## AI configuration
-Chat uses Claude through the official `@anthropic-ai/sdk`. Set `ANTHROPIC_API_KEY` in `server/.env` ([get a key](https://console.anthropic.com/settings/keys)). Optional: `LLM_MODEL` (default `claude-opus-5-5`), `LLM_EFFORT` (`low`…`max`, default `medium`), `LLM_MAX_TOKENS`.
+Chat uses Claude through the official `@anthropic-ai/sdk`. Set `ANTHROPIC_API_KEY` in `server/.env` ([get a key](https://console.anthropic.com/settings/keys)). Optional: `LLM_MODEL` (default `claude-opus-5-5`), `LLM_EFFORT` (`low`…`max`, default `medium`), `LLM_MAX_TOKENS`, `ENABLE_WEB_SEARCH` (default `true`; each search is billed by Anthropic).
 
 ## Roadmap
 - [x] Phase 1: Setup & authentication
 - [x] Phase 2: Chat UI + LLM (streaming Q&A)
-- [ ] Phase 3: Tool framework + action log
+- [x] Phase 3: Tool framework + action log
 - [ ] Phase 4: Google OAuth + email tools
 - [ ] Phase 5: Calendar tools + confirmation cards
 - [ ] Phase 6: Reminders & scheduled tasks

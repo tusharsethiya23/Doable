@@ -6,7 +6,7 @@ import { getErrorMessage } from '../lib/api';
 export const useChatStore = create((set, get) => ({
   conversations: [],
   activeId: null, // id of the open conversation (null = new, unsaved chat)
-  messages: [], // [{ id, role, text, status, streaming? }]
+  messages: [], // user: { id, role, text }   assistant: { id, role, parts, status, streaming?, error? }
   loadingMessages: false,
   isStreaming: false,
   error: '',
@@ -62,7 +62,7 @@ export const useChatStore = create((set, get) => ({
 
     // Show the user's message and an empty assistant bubble immediately
     const tempUserId = `temp-user-${Date.now()}`;
-    const tempAssistantId = `temp-assistant-${Date.now()}`;
+    const liveId = `live-assistant-${Date.now()}`;
     const abortController = new AbortController();
     set((s) => ({
       isStreaming: true,
@@ -70,36 +70,73 @@ export const useChatStore = create((set, get) => ({
       messages: [
         ...s.messages,
         { id: tempUserId, role: 'user', text },
-        { id: tempAssistantId, role: 'assistant', text: '', streaming: true },
+        { id: liveId, role: 'assistant', parts: [], streaming: true },
       ],
     }));
 
-    // Small helper to update one message in the list
+    // Helpers that update one message / the live assistant bubble
     const patchMessage = (id, patch) =>
       set((s) => ({ messages: s.messages.map((m) => (m.id === id ? { ...m, ...patch } : m)) }));
-    let assistantId = tempAssistantId;
+    const updateLive = (fn) => set((s) => ({ messages: s.messages.map((m) => (m.id === liveId ? { ...m, ...fn(m) } : m)) }));
+    let turnStart = 0; // where the current model turn's parts begin (to undo a turn if the server re-runs it)
 
     try {
       await chatApi.streamMessage(conversationId, text, {
         signal: abortController.signal,
         onEvent: (event, data) => {
-          if (event === 'start') patchMessage(tempUserId, data.userMessage);
-          else if (event === 'title') get().upsertConversation(data.conversation);
-          else if (event === 'delta')
-            set((s) => ({ messages: s.messages.map((m) => (m.id === assistantId ? { ...m, text: m.text + data.text } : m)) }));
-          else if (event === 'done') {
-            patchMessage(assistantId, { ...data.message, streaming: false });
-            assistantId = data.message.id;
-          } else if (event === 'error') patchMessage(assistantId, { streaming: false, status: 'error', text: data.message });
+          switch (event) {
+            case 'start':
+              patchMessage(tempUserId, data.userMessage);
+              break;
+            case 'title':
+              get().upsertConversation(data.conversation);
+              break;
+            case 'turn_start':
+              updateLive((m) => {
+                turnStart = m.parts.length;
+                return {};
+              });
+              break;
+            case 'turn_reset':
+              updateLive((m) => ({ parts: m.parts.slice(0, turnStart) }));
+              break;
+            case 'delta':
+              updateLive((m) => {
+                const last = m.parts.at(-1);
+                return last?.type === 'text'
+                  ? { parts: [...m.parts.slice(0, -1), { ...last, text: last.text + data.text }] }
+                  : { parts: [...m.parts, { type: 'text', text: data.text }] };
+              });
+              break;
+            case 'tool_start':
+              updateLive((m) => ({ parts: [...m.parts, { type: 'tool', id: data.id, name: data.name, status: 'running' }] }));
+              break;
+            case 'tool_result':
+              updateLive((m) => ({ parts: m.parts.map((p) => (p.id === data.id ? { ...p, status: data.status } : p)) }));
+              break;
+            case 'error':
+              updateLive(() => ({ error: data.message }));
+              break;
+            case 'done':
+              // Swap the live bubble for the saved turns; keep any error (e.g. "too many steps") visible
+              set((s) => {
+                const live = s.messages.find((m) => m.id === liveId);
+                const extra = live?.error ? [{ id: `${liveId}-error`, role: 'assistant', parts: [], error: live.error }] : [];
+                return { messages: s.messages.flatMap((m) => (m.id === liveId ? [...data.messages, ...extra] : [m])) };
+              });
+              break;
+          }
         },
       });
     } catch (err) {
       if (err.name === 'AbortError') {
-        patchMessage(assistantId, { streaming: false, status: 'stopped' });
+        // Tools that were mid-run when the user pressed Stop
+        updateLive((m) => ({ status: 'stopped', parts: m.parts.map((p) => (p.status === 'running' ? { ...p, status: 'stopped' } : p)) }));
       } else {
-        patchMessage(assistantId, { streaming: false, status: 'error', text: getErrorMessage(err) });
+        updateLive(() => ({ error: getErrorMessage(err) }));
       }
     } finally {
+      updateLive(() => ({ streaming: false }));
       set({ isStreaming: false, abortController: null });
       get().bumpConversation(conversationId);
     }

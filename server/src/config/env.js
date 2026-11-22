@@ -18,6 +18,11 @@ const envSchema = z.object({
   LLM_MODEL: z.string().default('claude-opus-5-5'),
   LLM_EFFORT: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).default('medium'),
   LLM_MAX_TOKENS: z.coerce.number().int().positive().default(64000),
+  // Lets the agent search the web for current info (billed per search by Anthropic)
+  ENABLE_WEB_SEARCH: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
 });
 
 const parsed = envSchema.safeParse(process.env);

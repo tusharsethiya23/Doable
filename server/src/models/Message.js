@@ -1,6 +1,6 @@
 // Message model: one turn in a conversation.
-// `content` is stored exactly as the Claude API returned it (thinking blocks included) so it can be sent back unchanged;
-// `text` is the plain text shown in the UI.
+// `content` is stored exactly as the Claude API returned it (thinking + tool blocks included) so it can be sent back unchanged;
+// `text` is the plain text, and `parts` (built in toJSON) is what the UI renders: text and tool-call chips in order.
 import mongoose from 'mongoose';
 
 const messageSchema = new mongoose.Schema(
@@ -8,10 +8,14 @@ const messageSchema = new mongoose.Schema(
     conversationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Conversation', required: true },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     role: { type: String, enum: ['user', 'assistant'], required: true },
-    content: { type: mongoose.Schema.Types.Mixed, required: true }, // string (user) or array of API content blocks (assistant)
+    // message = normal chat turn; tool_results = hidden turn carrying tool outputs back to Claude
+    kind: { type: String, enum: ['message', 'tool_results'], default: 'message' },
+    content: { type: mongoose.Schema.Types.Mixed, required: true }, // string or array of API content blocks
     text: { type: String, default: '' },
     // complete = normal reply, stopped = user pressed Stop, refused = model declined (not sent back to the API)
     status: { type: String, enum: ['complete', 'stopped', 'refused'], default: 'complete' },
+    // Outcome of each tool call made in this (assistant) turn
+    toolRuns: [{ _id: false, toolUseId: String, name: String, status: { type: String, enum: ['success', 'failed'] } }],
     model: String,
     stopReason: String,
     usage: {
@@ -31,11 +35,33 @@ const messageSchema = new mongoose.Schema(
           text: ret.text,
           status: ret.status,
           createdAt: ret.createdAt,
+          ...(ret.role === 'assistant' && { parts: toParts(ret) }),
         };
       },
     },
   }
 );
+
+// Turns stored API blocks into UI parts: [{ type: 'text', text }, { type: 'tool', id, name, status }]
+function toParts(ret) {
+  if (!Array.isArray(ret.content)) return [{ type: 'text', text: ret.text }];
+
+  const statusById = new Map((ret.toolRuns || []).map((r) => [r.toolUseId, r.status]));
+  const parts = [];
+  for (const block of ret.content) {
+    if (block.type === 'text' && block.text) {
+      const last = parts.at(-1);
+      if (last?.type === 'text') last.text += block.text;
+      else parts.push({ type: 'text', text: block.text });
+    } else if (block.type === 'tool_use' || block.type === 'server_tool_use') {
+      parts.push({ type: 'tool', id: block.id, name: block.name, status: statusById.get(block.id) ?? 'success' });
+    } else if (block.type === 'web_search_tool_result' && !Array.isArray(block.content)) {
+      const part = parts.find((p) => p.id === block.tool_use_id);
+      if (part) part.status = 'failed'; // search returned an error object
+    }
+  }
+  return parts;
+}
 
 messageSchema.index({ conversationId: 1, createdAt: 1 });
 

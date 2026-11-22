@@ -2,6 +2,7 @@
 import { clearRefreshCookie } from '../utils/tokens.js';
 import { Conversation } from '../models/Conversation.js';
 import { Message } from '../models/Message.js';
+import { Action } from '../models/Action.js';
 
 export async function getMe(req, res) {
   res.json({ success: true, user: req.user });
@@ -16,6 +17,7 @@ export async function updateMe(req, res) {
 export async function deleteMe(req, res) {
   // Remove everything the user owns (later phases add tokens, tasks, etc.)
   await Message.deleteMany({ userId: req.user._id });
+  await Action.deleteMany({ userId: req.user._id });
   await Conversation.deleteMany({ userId: req.user._id });
   await req.user.deleteOne();
   clearRefreshCookie(res);

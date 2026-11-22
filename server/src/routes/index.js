@@ -3,6 +3,7 @@ import { Router } from 'express';
 import authRoutes from './authRoutes.js';
 import userRoutes from './userRoutes.js';
 import conversationRoutes from './conversationRoutes.js';
+import activityRoutes from './activityRoutes.js';
 
 const router = Router();
 
@@ -12,5 +13,6 @@ router.get('/health', (_req, res) => res.json({ success: true, status: 'ok', tim
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
 router.use('/conversations', conversationRoutes);
+router.use('/activity', activityRoutes);
 
 export default router;

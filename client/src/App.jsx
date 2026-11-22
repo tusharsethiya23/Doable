@@ -9,6 +9,7 @@ import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Chat from './pages/Chat';
+import Activity from './pages/Activity';
 import NotFound from './pages/NotFound';
 
 export default function App() {
@@ -39,6 +40,7 @@ export default function App() {
       <Route element={<RequireAuth />}>
         <Route path="/chat" element={<Chat />} />
         <Route path="/chat/:id" element={<Chat />} />
+        <Route path="/activity" element={<Activity />} />
       </Route>
 
       <Route path="*" element={<NotFound />} />

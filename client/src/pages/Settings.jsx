@@ -6,6 +6,7 @@ import Spinner from '../components/Spinner';
 import ProfileForm from '../components/settings/ProfileForm';
 import GoogleIntegrationCard from '../components/settings/GoogleIntegrationCard';
 import UsageCard from '../components/settings/UsageCard';
+import DangerZone from '../components/settings/DangerZone';
 import { listIntegrations } from '../services/integrationService';
 import { getErrorMessage } from '../lib/api';
 
@@ -96,6 +97,13 @@ export default function Settings() {
             Profile
           </h2>
           <ProfileForm />
+        </section>
+
+        <section aria-labelledby="danger-heading" className="space-y-3">
+          <h2 id="danger-heading" className="text-lg font-semibold text-red-600">
+            Danger zone
+          </h2>
+          <DangerZone />
         </section>
       </main>
     </div>

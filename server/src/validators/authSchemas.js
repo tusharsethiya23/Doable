@@ -26,6 +26,14 @@ export const loginSchema = z.object({
   password: z.string().min(1, 'Password is required'),
 });
 
+// Confirmation for deleting the account: password (normal accounts) or the email typed out (Google-only accounts)
+export const deleteAccountSchema = z
+  .object({
+    password: z.string().max(128).optional(),
+    confirmEmail: z.string().trim().max(200).optional(),
+  })
+  .strict();
+
 export const updateProfileSchema = z
   .object({
     name: name.optional(),

@@ -5,7 +5,7 @@ services:
   - type: web
     name: doable
     runtime: node
-    plan: starter # the free plan sleeps when idle, which pauses reminders & scheduled tasks — see the guide
+    plan: free # sleeps after 15 min idle (reminders pause) — keep it awake with an uptime pinger, or switch to "starter"
     region: singapore # pick the region closest to your users (and to your MongoDB Atlas cluster)
     buildCommand: npm run build
     startCommand: npm start

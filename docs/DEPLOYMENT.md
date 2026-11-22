@@ -54,8 +54,8 @@ Also get an Anthropic API key from [console.anthropic.com](https://console.anthr
 4. **Check the logs.** Lines starting with `⚠️ [production]` point out settings that still need fixing, for example a `CLIENT_URL` that still says localhost.
 
 > **Free plan vs Starter:** the free plan *sleeps after 15 minutes without traffic*. While it sleeps, **reminders and scheduled tasks don't run**, and the first visit after sleeping takes about 50 seconds.
-> - For real use, keep `plan: starter` in `render.yaml`.
-> - For a demo on the free plan, change it to `plan: free` and add a free uptime monitor (for example UptimeRobot) that pings `/api/health` every 5 minutes. The free plan's 750 hours per month is enough for one always-on service.
+> - `render.yaml` uses `plan: free`. Add a free uptime monitor (for example UptimeRobot) that pings `/api/health` every 5 minutes to keep the app awake. The free plan's 750 hours per month is enough for one always-on service.
+> - For reliable production use, change it to `plan: starter` ($7/month).
 
 **Optional settings:**
 - In Render, set **Settings → Auto-Deploy → "After CI checks pass"**, so a commit that fails the tests is never deployed.

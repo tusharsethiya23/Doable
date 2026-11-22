@@ -55,7 +55,9 @@ const envSchema = z.object({
     .transform((v) => v.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean)),
 });
 
-const parsed = envSchema.safeParse(process.env);
+// Treat blank values (e.g. an empty field left on the hosting dashboard) as "not set", so defaults apply
+const definedVars = Object.fromEntries(Object.entries(process.env).filter(([, value]) => value !== ''));
+const parsed = envSchema.safeParse(definedVars);
 
 if (!parsed.success) {
   console.error('❌ Invalid environment variables:');

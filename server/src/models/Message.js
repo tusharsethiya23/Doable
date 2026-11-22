@@ -14,10 +14,16 @@ const messageSchema = new mongoose.Schema(
     text: { type: String, default: '' },
     // complete = normal reply, stopped = user pressed Stop, refused = model declined (not sent back to the API)
     status: { type: String, enum: ['complete', 'stopped', 'refused'], default: 'complete' },
-    // Outcome of each tool call made in this (assistant) turn
+    // Outcome of each tool call made in this (assistant) turn. pending = waiting for the user's approval.
     // needsIntegration = the tool failed because an account (e.g. 'google') must be connected first
     toolRuns: [
-      { _id: false, toolUseId: String, name: String, status: { type: String, enum: ['success', 'failed'] }, needsIntegration: String },
+      {
+        _id: false,
+        toolUseId: String,
+        name: String,
+        status: { type: String, enum: ['success', 'failed', 'pending', 'rejected', 'expired'] },
+        needsIntegration: String,
+      },
     ],
     model: String,
     stopReason: String,

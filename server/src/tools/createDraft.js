@@ -11,6 +11,7 @@ export default {
   type: 'write',
   autoApprove: true, // low risk: only visible to the user and easy to delete (SRS FR-5.6)
   integration: 'google',
+  scopes: [GOOGLE_SCOPES.gmailCompose, GOOGLE_SCOPES.gmailRead],
   inputSchema: composeEmailSchema,
 
   async run(input, { user }) {

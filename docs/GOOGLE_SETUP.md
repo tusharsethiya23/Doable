@@ -1,16 +1,18 @@
-# Google setup (Gmail)
+# Google setup (Gmail + Calendar)
 
-This guide connects the app to Google so the assistant can read, draft and send email. It takes about 10 minutes and is free.
+This guide connects the app to Google so the assistant can read, draft and send email and manage calendar events. It takes about 10 minutes and is free.
+
+> **Already set up for Gmail (Phase 4)?** Do steps 2 and 3 again: enable the **Google Calendar API** and add the `.../auth/calendar.events` scope. Then open **Settings** in the app and click **Reconnect** to grant calendar access.
 
 ## 1. Create a Google Cloud project
 1. Open the [Google Cloud Console](https://console.cloud.google.com/).
 2. Click the project picker at the top, then **New project**. Name it (for example, "Doable") and click **Create**.
 3. Make sure the new project is selected in the top bar.
 
-## 2. Turn on the Gmail API
+## 2. Turn on the Gmail and Calendar APIs
 1. Go to **APIs & Services → Library**.
 2. Search for **Gmail API** and click **Enable**.
-   (In Phase 5 you'll enable the **Google Calendar API** the same way.)
+3. Search for **Google Calendar API** and click **Enable**.
 
 ## 3. Set up the consent screen
 1. Go to **APIs & Services → OAuth consent screen** (shown as **Google Auth Platform** in newer consoles).
@@ -18,6 +20,7 @@ This guide connects the app to Google so the assistant can read, draft and send 
 3. **Scopes / Data access:** add these scopes:
    - `.../auth/gmail.readonly`
    - `.../auth/gmail.compose`
+   - `.../auth/calendar.events`
    - `openid` and `.../auth/userinfo.email`
 4. **Test users / Audience:** add the Gmail addresses that will try the app, including your own.
    While the app is in **Testing**, only these accounts can connect (up to 100).
@@ -58,6 +61,9 @@ Restart the server. The startup warning about Google should be gone.
    - "Do I have any unread emails?"
    - "Summarise the latest email from Amazon"
    - "Draft an email to me@example.com saying the report is ready"
+   - "Email me@example.com that the report is ready". An approval card appears; click **Approve** to send.
+   - "What's on my calendar tomorrow?"
+   - "Find 30 minutes tomorrow afternoon and book a call with me@example.com with a Meet link"
 
 ## Troubleshooting
 | Problem | Fix |

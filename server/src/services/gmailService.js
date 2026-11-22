@@ -1,28 +1,14 @@
 // Gmail helpers used by the email tools: authenticated client, message parsing, and building raw emails to send.
 import { gmail as gmailApi } from '@googleapis/gmail';
-import { getGoogleAuth, markGoogleExpired } from './googleAuthService.js';
-import { IntegrationError } from '../utils/ApiError.js';
+import { withGoogle } from './googleApi.js';
 
 const MAX_BODY_CHARS = 15000; // keep long emails from flooding the AI's context
 
-/**
- * Runs fn({ gmail, integration }) with an authenticated Gmail client,
- * converting Google auth/permission failures into IntegrationError (→ "Connect Google" button in the UI).
- */
-export async function withGmail(user, requiredScopes, fn) {
-  const { client, integration } = await getGoogleAuth(user, requiredScopes);
-  try {
-    return await fn({ gmail: gmailApi({ version: 'v1', auth: client }), integration });
-  } catch (err) {
-    const googleError = err?.response?.data?.error;
-    if (googleError === 'invalid_grant' || /invalid_grant/.test(err?.message || '')) {
-      await markGoogleExpired(user._id);
-      throw new IntegrationError('google', 'expired');
-    }
-    if (err?.status === 403 && /insufficient/i.test(err?.message || '')) throw new IntegrationError('google', 'missing_scopes');
-    if (err?.status === 404) throw new Error('Email not found. It may have been deleted, or the id is wrong.');
-    throw err;
-  }
+/** Runs fn({ gmail, integration }) with an authenticated Gmail client. */
+export function withGmail(user, requiredScopes, fn) {
+  return withGoogle(user, requiredScopes, ({ client, integration }) =>
+    fn({ gmail: gmailApi({ version: 'v1', auth: client }), integration })
+  );
 }
 
 // ---------- Reading ----------

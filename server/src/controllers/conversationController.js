@@ -1,6 +1,8 @@
-// HTTP handlers for /api/conversations: list/create/rename/delete chats and run the agent on new messages.
+// HTTP handlers for /api/conversations: list/create/rename/delete chats, run the agent on new messages,
+// and continue the agent after the user decided on approval cards.
 import { Conversation, DEFAULT_TITLE } from '../models/Conversation.js';
 import { Message } from '../models/Message.js';
+import { Action } from '../models/Action.js';
 import {
   findOwnedConversation,
   findVisibleMessages,
@@ -8,9 +10,10 @@ import {
   makeTitle,
   deleteConversation,
 } from '../services/chatService.js';
-import { runAgent } from '../services/agentService.js';
+import { runAgent, resumeAgent, finalizePausedTurn } from '../services/agentService.js';
 import { friendlyLLMError } from '../services/llmService.js';
 import { openSSE } from '../utils/sse.js';
+import { ApiError } from '../utils/ApiError.js';
 
 export async function listConversations(req, res) {
   const conversations = await Conversation.find({ userId: req.user._id }).sort({ lastMessageAt: -1 }).limit(100);
@@ -25,7 +28,12 @@ export async function createConversation(req, res) {
 export async function getConversation(req, res) {
   const conversation = await findOwnedConversation(req.params.id, req.user._id);
   const messages = await findVisibleMessages(conversation._id);
-  res.json({ success: true, conversation, messages });
+  // Approval cards to show again after a page reload
+  const pendingActions =
+    conversation.status === 'awaiting_approval'
+      ? await Action.find({ messageId: conversation.pendingTurn?.assistantMessageId, preview: { $exists: true } }).sort({ createdAt: 1 })
+      : [];
+  res.json({ success: true, conversation, messages, pendingActions });
 }
 
 export async function renameConversation(req, res) {
@@ -42,50 +50,69 @@ export async function removeConversation(req, res) {
 }
 
 /**
- * POST /api/conversations/:id/messages
- * Saves the user's message, runs the agent, and streams progress back as Server-Sent Events:
+ * Shared streaming wrapper: opens Server-Sent Events, cancels the AI when the browser disconnects,
+ * runs `work`, then sends `done` (or `error`). Events:
  *   start → { userMessage }   title → { conversation }   turn_start / turn_reset → {}
- *   delta → { text }          tool_start → { id, name }  tool_result → { id, status }
- *   done → { messages }       error → { message }
+ *   delta → { text }          tool_start → { id, name }  tool_result → { id, status, needsIntegration? }
+ *   approval_required → { actions }   done → { messages, awaitingApproval }   error → { message }
  */
-export async function sendMessage(req, res) {
-  const user = req.user;
-  const conversation = await findOwnedConversation(req.params.id, user._id);
-
-  const userMessage = await Message.create({
-    conversationId: conversation._id,
-    userId: user._id,
-    role: 'user',
-    content: req.body.content,
-    text: req.body.content,
-  });
-
-  // Name the chat after its first message
-  const isFirstMessage = conversation.title === DEFAULT_TITLE;
-  if (isFirstMessage) conversation.title = makeTitle(req.body.content);
-  conversation.lastMessageAt = new Date();
-  await conversation.save();
-
-  const history = await buildApiHistory(conversation._id);
-
-  // From here on we answer with a stream, so errors are sent as events (not JSON responses)
+async function streamAgent(res, work) {
   const sse = openSSE(res);
-  sse.send('start', { userMessage });
-  if (isFirstMessage) sse.send('title', { conversation });
-
-  // If the browser disconnects (Stop button / closed tab), cancel the AI request to save tokens
   const controller = new AbortController();
   res.on('close', () => {
     if (!res.writableFinished) controller.abort();
   });
 
   try {
-    const messages = await runAgent({ user, conversation, history, signal: controller.signal, emit: sse.send });
-    sse.send('done', { messages });
+    const { messages, awaitingApproval } = await work({ emit: sse.send, signal: controller.signal });
+    sse.send('done', { messages, awaitingApproval });
   } catch (err) {
     console.error('Agent error:', err);
-    sse.send('error', { message: friendlyLLMError(err) });
+    sse.send('error', { message: err instanceof ApiError ? err.message : friendlyLLMError(err) });
   } finally {
     sse.end();
   }
+}
+
+// POST /api/conversations/:id/messages — saves the user's message and runs the agent
+export async function sendMessage(req, res) {
+  const user = req.user;
+  const conversation = await findOwnedConversation(req.params.id, user._id);
+
+  await streamAgent(res, async ({ emit, signal }) => {
+    // If approvals were still open, the user moved on: finish that turn first (undecided actions are not done)
+    if (conversation.status === 'awaiting_approval') {
+      await finalizePausedTurn({ user, conversation, emit });
+      emit('approvals_closed', {});
+    }
+
+    const userMessage = await Message.create({
+      conversationId: conversation._id,
+      userId: user._id,
+      role: 'user',
+      content: req.body.content,
+      text: req.body.content,
+    });
+    emit('start', { userMessage });
+
+    // Name the chat after its first message
+    if (conversation.title === DEFAULT_TITLE) {
+      conversation.title = makeTitle(req.body.content);
+      emit('title', { conversation });
+    }
+    conversation.lastMessageAt = new Date();
+    await conversation.save();
+
+    const history = await buildApiHistory(conversation._id);
+    return runAgent({ user, conversation, history, signal, emit });
+  });
+}
+
+// POST /api/conversations/:id/continue — runs approved actions and lets the agent finish its answer
+export async function continueConversation(req, res) {
+  const user = req.user;
+  const conversation = await findOwnedConversation(req.params.id, user._id);
+  if (conversation.status !== 'awaiting_approval') throw new ApiError(409, 'Nothing is waiting for approval in this conversation');
+
+  await streamAgent(res, ({ emit, signal }) => resumeAgent({ user, conversation, signal, emit }));
 }

@@ -11,11 +11,20 @@ const FILTERS = [
   { value: '', label: 'All' },
   { value: 'success', label: 'Succeeded' },
   { value: 'failed', label: 'Failed' },
+  { value: 'pending', label: 'Waiting' },
+  { value: 'rejected', label: 'Rejected' },
 ];
 
-const badge = {
-  success: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300',
-  failed: 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-300',
+// Badge colour + text for each action status
+const grey = 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
+const STATUS = {
+  success: { label: 'Succeeded', className: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' },
+  failed: { label: 'Failed', className: 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-300' },
+  pending: { label: 'Waiting for approval', className: 'bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300' },
+  approved: { label: 'Approved', className: grey },
+  running: { label: 'Running', className: grey },
+  rejected: { label: 'Rejected', className: grey },
+  expired: { label: 'Not approved', className: grey },
 };
 
 // Pretty-prints JSON strings, leaves other text as is
@@ -106,8 +115,8 @@ export default function Activity() {
                       {formatTime(a.createdAt)} · {a.durationMs ?? 0} ms · {a.type === 'write' ? 'Action' : 'Lookup'}
                     </p>
                   </div>
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${badge[a.status]}`}>
-                    {a.status === 'success' ? 'Succeeded' : 'Failed'}
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS[a.status]?.className ?? grey}`}>
+                    {STATUS[a.status]?.label ?? a.status}
                   </span>
                   <span className="text-slate-400 transition group-open:rotate-90" aria-hidden="true">
                     ›
@@ -118,10 +127,18 @@ export default function Activity() {
                     <p className="mb-1 font-medium text-slate-500">Input</p>
                     <pre className="overflow-x-auto rounded-lg bg-slate-100 p-3 dark:bg-slate-950">{pretty(a.input) || '{}'}</pre>
                   </div>
-                  <div>
-                    <p className="mb-1 font-medium text-slate-500">{a.status === 'success' ? 'Result' : 'Error'}</p>
-                    <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg bg-slate-100 p-3 dark:bg-slate-950">{pretty(a.output ?? a.error)}</pre>
-                  </div>
+                  {a.editedInput && (
+                    <div>
+                      <p className="mb-1 font-medium text-slate-500">Your edited version</p>
+                      <pre className="overflow-x-auto rounded-lg bg-slate-100 p-3 dark:bg-slate-950">{pretty(a.editedInput)}</pre>
+                    </div>
+                  )}
+                  {(a.output || a.error) && (
+                    <div>
+                      <p className="mb-1 font-medium text-slate-500">{a.status === 'success' ? 'Result' : 'Error'}</p>
+                      <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg bg-slate-100 p-3 dark:bg-slate-950">{pretty(a.output ?? a.error)}</pre>
+                    </div>
+                  )}
                   {a.conversationId && (
                     <Link to={`/chat/${a.conversationId}`} className="inline-block font-medium text-brand-600 hover:underline">
                       Open conversation →

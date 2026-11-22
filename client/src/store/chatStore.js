@@ -1,4 +1,5 @@
-// Chat state (Zustand): sidebar conversations, the open conversation's messages, and the streaming reply.
+// Chat state (Zustand): sidebar conversations, the open conversation's messages, the streaming reply,
+// and approval cards (actions waiting for the user's Approve / Edit / Reject).
 import { create } from 'zustand';
 import * as chatApi from '../services/chatService';
 import { getErrorMessage } from '../lib/api';
@@ -7,6 +8,8 @@ export const useChatStore = create((set, get) => ({
   conversations: [],
   activeId: null, // id of the open conversation (null = new, unsaved chat)
   messages: [], // user: { id, role, text }   assistant: { id, role, parts, status, streaming?, error? }
+  pendingActions: [], // approval cards: { id, toolName, preview, status, expiresAt, input, ... }
+  awaitingApproval: false, // the agent is paused until the user decides
   loadingMessages: false,
   isStreaming: false,
   error: '',
@@ -20,13 +23,15 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
-  // Open an existing conversation and load its messages
+  // Open an existing conversation and load its messages (and any approval cards still open)
   async openConversation(id) {
     get().stop();
-    set({ activeId: id, messages: [], loadingMessages: true, error: '' });
+    set({ activeId: id, messages: [], pendingActions: [], awaitingApproval: false, loadingMessages: true, error: '' });
     try {
-      const { messages } = await chatApi.getConversation(id);
-      if (get().activeId === id) set({ messages }); // ignore if the user already switched chats
+      const { messages, conversation, pendingActions } = await chatApi.getConversation(id);
+      if (get().activeId === id) {
+        set({ messages, pendingActions, awaitingApproval: conversation.status === 'awaiting_approval' });
+      }
     } catch (err) {
       set({ error: getErrorMessage(err) });
     } finally {
@@ -37,11 +42,11 @@ export const useChatStore = create((set, get) => ({
   // Start a fresh, empty chat (created on the server when the first message is sent)
   newChat() {
     get().stop();
-    set({ activeId: null, messages: [], error: '' });
+    set({ activeId: null, messages: [], pendingActions: [], awaitingApproval: false, error: '' });
   },
 
   /**
-   * Sends a message and streams the reply into the last message.
+   * Sends a message and streams the reply.
    * Returns the conversation id (new chats get an id here) so the page can update the URL.
    */
   async send(text) {
@@ -60,38 +65,74 @@ export const useChatStore = create((set, get) => ({
       }
     }
 
-    // Show the user's message and an empty assistant bubble immediately
+    // Show the user's message right away (replaced by the saved one when the server confirms)
     const tempUserId = `temp-user-${Date.now()}`;
+    set((s) => ({ messages: [...s.messages, { id: tempUserId, role: 'user', text }] }));
+
+    await get().runStream(conversationId, (opts) => chatApi.streamMessage(conversationId, text, opts), { tempUserId });
+    return conversationId;
+  },
+
+  // Approve / reject one approval card. When none are left undecided, the agent continues automatically.
+  async decide(actionId, decision, input) {
+    const updateCard = (patch) => set((s) => ({ pendingActions: s.pendingActions.map((a) => (a.id === actionId ? { ...a, ...patch } : a)) }));
+    updateCard({ submitting: true, error: '' });
+    try {
+      const { action, remaining } = await chatApi.decideAction(actionId, decision, input);
+      updateCard({ ...action, submitting: false });
+      if (remaining === 0) await get().continueRun();
+    } catch (err) {
+      updateCard({ submitting: false, error: getErrorMessage(err) });
+      throw err;
+    }
+  },
+
+  // Resume the paused agent: runs approved actions and streams the rest of its answer
+  async continueRun() {
+    const conversationId = get().activeId;
+    if (!conversationId || get().isStreaming) return;
+    await get().runStream(conversationId, (opts) => chatApi.continueConversation(conversationId, opts), { closesApprovals: true });
+  },
+
+  /**
+   * Shared streaming logic for "send" and "continue": adds a live assistant bubble and applies server events.
+   * @param {string} conversationId
+   * @param {(opts: { signal, onEvent }) => Promise<void>} start - starts the request
+   */
+  async runStream(conversationId, start, { tempUserId, closesApprovals } = {}) {
     const liveId = `live-assistant-${Date.now()}`;
     const abortController = new AbortController();
     set((s) => ({
       isStreaming: true,
       abortController,
-      messages: [
-        ...s.messages,
-        { id: tempUserId, role: 'user', text },
-        { id: liveId, role: 'assistant', parts: [], streaming: true },
-      ],
+      messages: [...s.messages, { id: liveId, role: 'assistant', parts: [], streaming: true }],
     }));
 
-    // Helpers that update one message / the live assistant bubble
-    const patchMessage = (id, patch) =>
-      set((s) => ({ messages: s.messages.map((m) => (m.id === id ? { ...m, ...patch } : m)) }));
+    // Helpers that update one message / the live assistant bubble / a tool chip anywhere in the chat
+    const patchMessage = (id, patch) => set((s) => ({ messages: s.messages.map((m) => (m.id === id ? { ...m, ...patch } : m)) }));
     const updateLive = (fn) => set((s) => ({ messages: s.messages.map((m) => (m.id === liveId ? { ...m, ...fn(m) } : m)) }));
+    const updateToolPart = (toolId, patch) =>
+      set((s) => ({
+        messages: s.messages.map((m) => (m.parts?.some((p) => p.id === toolId) ? { ...m, parts: m.parts.map((p) => (p.id === toolId ? { ...p, ...patch } : p)) } : m)),
+      }));
     let turnStart = 0; // where the current model turn's parts begin (to undo a turn if the server re-runs it)
 
     try {
-      await chatApi.streamMessage(conversationId, text, {
+      await start({
         signal: abortController.signal,
         onEvent: (event, data) => {
           switch (event) {
             case 'start':
-              patchMessage(tempUserId, data.userMessage);
+              if (tempUserId) patchMessage(tempUserId, data.userMessage);
               break;
             case 'title':
               get().upsertConversation(data.conversation);
               break;
+            case 'approvals_closed': // user moved on without deciding: open cards are dropped
+              set({ pendingActions: [], awaitingApproval: false });
+              break;
             case 'turn_start':
+              if (closesApprovals) set({ pendingActions: [], awaitingApproval: false });
               updateLive((m) => {
                 turnStart = m.parts.length;
                 return {};
@@ -112,11 +153,10 @@ export const useChatStore = create((set, get) => ({
               updateLive((m) => ({ parts: [...m.parts, { type: 'tool', id: data.id, name: data.name, status: 'running' }] }));
               break;
             case 'tool_result':
-              updateLive((m) => ({
-                parts: m.parts.map((p) =>
-                  p.id === data.id ? { ...p, status: data.status, ...(data.needsIntegration && { needsIntegration: data.needsIntegration }) } : p
-                ),
-              }));
+              updateToolPart(data.id, { status: data.status, ...(data.needsIntegration && { needsIntegration: data.needsIntegration }) });
+              break;
+            case 'approval_required':
+              set({ pendingActions: data.actions, awaitingApproval: true });
               break;
             case 'error':
               updateLive(() => ({ error: data.message }));
@@ -140,11 +180,16 @@ export const useChatStore = create((set, get) => ({
         updateLive(() => ({ error: getErrorMessage(err) }));
       }
     } finally {
-      updateLive(() => ({ streaming: false }));
-      set({ isStreaming: false, abortController: null });
+      // Remove the live bubble if nothing was streamed into it (e.g. a resume that only ran actions), else freeze it
+      set((s) => ({
+        messages: s.messages
+          .filter((m) => !(m.id === liveId && !m.parts.length && !m.error && m.status !== 'stopped'))
+          .map((m) => (m.id === liveId ? { ...m, streaming: false } : m)),
+        isStreaming: false,
+        abortController: null,
+      }));
       get().bumpConversation(conversationId);
     }
-    return conversationId;
   },
 
   // Cancel the reply that is currently streaming (the server stops the AI request too)
@@ -194,6 +239,6 @@ export const useChatStore = create((set, get) => ({
   // Forget everything (used on logout)
   reset() {
     get().stop();
-    set({ conversations: [], activeId: null, messages: [], error: '', isStreaming: false });
+    set({ conversations: [], activeId: null, messages: [], pendingActions: [], awaitingApproval: false, error: '', isStreaming: false });
   },
 }));

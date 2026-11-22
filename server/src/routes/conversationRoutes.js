@@ -8,6 +8,7 @@ import {
   renameConversation,
   removeConversation,
   sendMessage,
+  continueConversation,
 } from '../controllers/conversationController.js';
 import { requireAuth } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
@@ -32,5 +33,6 @@ router.get('/:id', getConversation);
 router.patch('/:id', validate(renameConversationSchema), renameConversation);
 router.delete('/:id', removeConversation);
 router.post('/:id/messages', messageLimiter, validate(sendMessageSchema), sendMessage);
+router.post('/:id/continue', messageLimiter, continueConversation); // after approving/rejecting actions
 
 export default router;

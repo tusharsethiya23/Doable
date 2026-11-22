@@ -48,9 +48,22 @@ node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 | POST | `/api/integrations/google/connect` | Bearer | Returns Google's consent URL |
 | GET | `/api/integrations/google/callback` | state + cookie | OAuth callback (Google redirects here) |
 | DELETE | `/api/integrations/google` | Bearer | Disconnect and revoke Google access |
+| POST | `/api/actions/:id/decision` | Bearer | Approve (optionally with edited input) or reject an action |
+| POST | `/api/conversations/:id/continue` | Bearer | After approvals: run approved actions and stream the rest of the reply |
 
-## Google (Gmail) setup
-Follow [docs/GOOGLE_SETUP.md](docs/GOOGLE_SETUP.md) to create OAuth credentials. Email tools: `search_emails`, `read_email`, `create_draft` (runs directly, because only you can see drafts) and `send_email` (needs your approval; approval cards arrive in Phase 5). OAuth tokens are stored encrypted with AES-256-GCM.
+## Google (Gmail + Calendar) setup
+Follow [docs/GOOGLE_SETUP.md](docs/GOOGLE_SETUP.md) to create OAuth credentials. OAuth tokens are stored encrypted with AES-256-GCM.
+
+| Tool | Type | Approval |
+|---|---|---|
+| `search_emails`, `read_email` | read | — |
+| `create_draft` | write (low-risk) | runs directly, because only you can see drafts |
+| `send_email` | write | approval card |
+| `list_events`, `check_availability` | read | — |
+| `create_event`, `update_event`, `delete_event` | write | approval card |
+
+## Approvals (human in the loop)
+When the agent calls a `write` tool, it **pauses**: the action is saved as `pending` and an approval card shows exactly what will happen. You can **Approve**, **Edit** (emails and new events) or **Reject**. Once every card is decided, the agent resumes. Approved actions run exactly once, thanks to atomic status changes. Rejected actions, and actions not approved within 15 minutes, are reported back to the agent as not done. If you send a new message instead of deciding, the open cards are closed and nothing runs.
 
 ## Adding a tool
 1. Create `server/src/tools/myTool.js` exporting `{ name, description, type: 'read' | 'write', inputSchema (Zod), run(input, { user }) }`.
@@ -68,7 +81,7 @@ Chat uses Claude through the official `@anthropic-ai/sdk`. Set `ANTHROPIC_API_KE
 - [x] Phase 2: Chat UI + LLM (streaming Q&A)
 - [x] Phase 3: Tool framework + action log
 - [x] Phase 4: Google OAuth + email tools
-- [ ] Phase 5: Calendar tools + confirmation cards
+- [x] Phase 5: Calendar tools + confirmation cards
 - [ ] Phase 6: Reminders & scheduled tasks
 - [ ] Phase 7: Hardening & admin
 - [ ] Phase 8: Deployment

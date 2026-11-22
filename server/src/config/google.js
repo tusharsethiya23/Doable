@@ -6,6 +6,7 @@ import { env } from './env.js';
 export const GOOGLE_SCOPES = {
   gmailRead: 'https://www.googleapis.com/auth/gmail.readonly', // search and read emails
   gmailCompose: 'https://www.googleapis.com/auth/gmail.compose', // create drafts and send emails
+  calendarEvents: 'https://www.googleapis.com/auth/calendar.events', // view/create/edit events + free/busy
 };
 
 // Everything requested on the "Connect Google" screen (openid + email identify which account was connected)

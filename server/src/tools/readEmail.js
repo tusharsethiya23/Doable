@@ -9,6 +9,7 @@ export default {
     'Read the full content of one email by its id. Call this after search_emails when you need more than the snippet, e.g. to summarise an email, answer a question about it, or reply to it.',
   type: 'read',
   integration: 'google',
+  scopes: [GOOGLE_SCOPES.gmailRead],
   inputSchema: z.object({
     messageId: z.string().min(1).describe('The email id returned by search_emails.'),
   }),

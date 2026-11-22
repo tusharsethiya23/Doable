@@ -9,7 +9,9 @@ import { getErrorMessage } from '../../lib/api';
 const SCOPE_LABELS = {
   'https://www.googleapis.com/auth/gmail.readonly': 'Read and search your email',
   'https://www.googleapis.com/auth/gmail.compose': 'Create drafts and send email (with your approval)',
+  'https://www.googleapis.com/auth/calendar.events': 'See and manage calendar events (changes need your approval)',
 };
+const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
 
 export default function GoogleIntegrationCard({ integration, available, onChange }) {
   const [busy, setBusy] = useState(false);
@@ -36,6 +38,8 @@ export default function GoogleIntegrationCard({ integration, available, onChange
   };
 
   const expired = integration?.status === 'expired';
+  // Connected before Calendar support was added → needs to reconnect once to grant calendar access
+  const missingCalendar = integration && !expired && !integration.scopes?.includes(CALENDAR_SCOPE);
   const permissions = (integration?.scopes || []).map((s) => SCOPE_LABELS[s]).filter(Boolean);
 
   return (
@@ -46,7 +50,7 @@ export default function GoogleIntegrationCard({ integration, available, onChange
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-medium">Google (Gmail)</h3>
+            <h3 className="font-medium">Google (Gmail + Calendar)</h3>
             {integration && (
               <span
                 className={`rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -67,6 +71,7 @@ export default function GoogleIntegrationCard({ integration, available, onChange
               ))}
             </ul>
           )}
+          {missingCalendar && <p className="mt-2 text-xs text-amber-600">Reconnect to give the assistant access to your calendar.</p>}
           {!available && <p className="mt-2 text-xs text-amber-600">Google isn’t configured on the server yet (see docs/GOOGLE_SETUP.md).</p>}
           {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
         </div>
@@ -79,13 +84,13 @@ export default function GoogleIntegrationCard({ integration, available, onChange
             Disconnect
           </button>
         )}
-        {(!integration || expired) && (
+        {(!integration || expired || missingCalendar) && (
           <button
             onClick={() => run(connectGoogle)}
             disabled={busy || !available}
             className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
           >
-            {expired ? 'Reconnect' : 'Connect Google'}
+            {expired || missingCalendar ? 'Reconnect' : 'Connect Google'}
           </button>
         )}
       </div>

@@ -9,6 +9,7 @@ export default {
     "Search the user's Gmail inbox. Call this when the user asks about their emails (e.g. unread mail, messages from someone, an order or booking confirmation), or to find a person's email address before writing to them. Returns sender, subject, date and a short snippet; use read_email for the full text.",
   type: 'read',
   integration: 'google',
+  scopes: [GOOGLE_SCOPES.gmailRead],
   inputSchema: z.object({
     query: z
       .string()

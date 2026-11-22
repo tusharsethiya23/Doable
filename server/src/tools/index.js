@@ -1,5 +1,7 @@
 // Tool registry: the single list of tools the agent can use.
-// To add a tool: create a file in this folder (name, description, type, inputSchema, run) and add it to `tools` below.
+// To add a tool: create a file in this folder and add it to `allTools` below. A tool exports:
+//   name, description (say WHEN to call it), type ('read' | 'write'), inputSchema (Zod), run(input, ctx)
+//   optional: integration ('google') + scopes, autoApprove (low-risk write), preview(input, ctx) for approval cards
 import { z } from 'zod';
 import { env, googleEnabled } from '../config/env.js';
 import getCurrentTime from './getCurrentTime.js';
@@ -7,8 +9,27 @@ import searchEmails from './searchEmails.js';
 import readEmail from './readEmail.js';
 import createDraft from './createDraft.js';
 import sendEmail from './sendEmail.js';
+import listEvents from './listEvents.js';
+import checkAvailability from './checkAvailability.js';
+import createEvent from './createEvent.js';
+import updateEvent from './updateEvent.js';
+import deleteEvent from './deleteEvent.js';
 
-const allTools = [getCurrentTime, searchEmails, readEmail, createDraft, sendEmail];
+const allTools = [
+  getCurrentTime,
+  searchEmails,
+  readEmail,
+  createDraft,
+  sendEmail,
+  listEvents,
+  checkAvailability,
+  createEvent,
+  updateEvent,
+  deleteEvent,
+];
+
+// Write tools need user approval unless marked low-risk
+export const needsApproval = (tool) => tool.type === 'write' && !tool.autoApprove;
 
 // Hide tools whose integration isn't configured on this server (e.g. no Google credentials in .env)
 const integrationEnabled = { google: googleEnabled };

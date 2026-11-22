@@ -25,7 +25,9 @@ export default function ConnectCard({ provider }) {
     <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center dark:border-slate-800 dark:bg-slate-900">
       <div className="flex-1 text-sm">
         <p className="font-medium">Connect your Google account</p>
-        <p className="text-slate-500">So I can read, draft and send emails for you. You approve every email before it’s sent.</p>
+        <p className="text-slate-500">
+          So I can help with your email and calendar. You approve every email and event change first. (Already connected? Reconnect to grant new permissions.)
+        </p>
         {error && <p className="mt-1 text-red-600">{error}</p>}
       </div>
       <button
